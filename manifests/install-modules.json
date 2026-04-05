@@ -201,6 +201,7 @@
       "paths": [
         "skills/ai-regression-testing",
         "skills/configure-ecc",
+        "skills/commit",
         "skills/continuous-learning",
         "skills/continuous-learning-v2",
         "skills/e2e-testing",
@@ -208,6 +209,7 @@
         "skills/iterative-retrieval",
         "skills/plankton-code-quality",
         "skills/project-guidelines-example",
+        "skills/review",
         "skills/skill-stocktake",
         "skills/strategic-compact",
         "skills/tdd-workflow",
