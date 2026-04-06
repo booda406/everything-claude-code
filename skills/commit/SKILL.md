@@ -43,10 +43,15 @@ disable-model-invocation: true
    - 內文用條列式列出主要變更，方便日後 `git log` 查閱
    - **附上 AI 助手署名**：若該次變更由 AI 助手協助完成，請在訊息最末端加入對應的 `Co-authored-by`。
      - **一般原則**：`Co-authored-by` 的 **email 請用各平台官方建議地址**；**模型／產品識別寫在姓名（name）欄**，便於 `git log` 閱讀與事後追溯。
-     - **Cursor（含 Auto 模式）**：執行本流程的**就是當前這個對話裡的助手**——請依你（本模型）在系統／開發者訊息中所知的 **自身顯示名稱**（與 Cursor UI 選單上常見的稱呼一致者為佳）填入括號，**自動填寫**，無需使用者再打字提供。
+     - **Cursor（含 Auto 模式）**：執行本流程的**就是當前這個對話裡的助手**。**預設必須**在 `Co-authored-by` 裡**寫出本助手在這輪對話中的可識別名稱**（由**模型自己**依下文步驟填寫，不要省略括號、不要請使用者代填）。
+       - **自識別步驟（執行 commit 前在內部做完）**：
+         1. **盤點線索**：系統／開發者訊息中的 **model**、產品／工具對本對話的模型說明、使用者可見的模型選單標籤、或本輪對話開頭對助手的稱呼（含 **Opus / Sonnet / Haiku**、代次如 **4.5**、**4** 等）。
+         2. **盡量寫滿版本粒度（在證據範圍內）**：括號內字串優先採 **「家族 + 分支 + 可確定的最細代次／版本」**，例如 `Claude Sonnet 4.5`、`Claude Opus 4.1`、`GPT-5.2`；**能寫出數字代次就寫**，不要刻意縮成僅 `Claude` 了事。若線索只到「Sonnet」無小版本，則 `Claude Sonnet` 或 `Claude Sonnet 4`（以線索為準）。
+         3. **與 Cursor UI 對齊**：若同一模型在介面上以固定字串顯示（如 `Claude Sonnet 4.5`），括號內**優先使用該字串**（必要時將空格／標點微調為單行 `git` trailer 安全字元）。
+         4. **禁止**：略過括號；虛構線索中**不存在**的細版本或內部 build 號。若僅能確定「Claude 系列」無分支資訊，才用 `Claude`——仍優於無括號退路。
        - 格式：`Co-authored-by: Cursor (<你的模型顯示名稱>) <cursoragent@cursor.com>`
-       - 範例（僅示意，請以你實際所知為準）：`Co-authored-by: Cursor (Claude Sonnet 4.5) <cursoragent@cursor.com>`
-       - 若你**無法**從上下文確定自己的模型顯示名稱（極少見），則退回：`Co-authored-by: Cursor <cursoragent@cursor.com>`，**不可臆造**不存在的型號字串。
+       - 範例（僅示意，**以你自識到的最細版本為準**）：`Co-authored-by: Cursor (Claude Sonnet 4.5) <cursoragent@cursor.com>`
+       - **僅當**完成上述自識別步驟後仍**毫無**可查線索時，才退回：`Co-authored-by: Cursor <cursoragent@cursor.com>`。
      - **Claude（非 Cursor 包裝時）** 範例：`Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>`
      - **Gemini** 範例：`Co-authored-by: Gemini <gemini-cli@google.com>`
 
@@ -54,6 +59,7 @@ disable-model-invocation: true
    - `git add -A` 將所有變更（含未追蹤的合理檔案）加入 staging
    - 若有**不應被 commit 的暫存檔**（例如僅用來寫 message 的 .txt），先 `git restore --staged <file>` 取消
    - 使用 `git commit -m "..."` 或 `git commit -F <message-file>` 送出
+   - **若 log 底端出現非本流程撰寫的 `Made-with: Cursor`（或其它非預期尾註）**：多為 IDE／全域 **`commit-msg` hook** 自動附加。請以正確訊息 **`git commit --amend -F <message-file> --no-verify`** 重寫（`--no-verify` 略過該 hook）；**勿**在訊息中保留 `Made-with:`（與 **`skills/dev/SKILL.md`** 一致）。
    - commit 完成後，可刪除僅用於本次的暫存檔（如 message 檔）
 
 6. **回覆使用者**

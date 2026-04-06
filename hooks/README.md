@@ -1,5 +1,7 @@
 # Hooks
 
+**Languages:** [繁體中文](README.zh-TW.md)
+
 Hooks are event-driven automations that fire before or after Claude Code tool executions. They enforce code quality, catch mistakes early, and automate repetitive checks.
 
 ## How Hooks Work

@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ECC post-install prune config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "const": 1 },
+    "description": { "type": "string" },
+    "claudeHome": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Override install root (default: ~/.claude)"
+    },
+    "cursorProjectRoot": {
+      "type": "string",
+      "description": "Project directory that contains .cursor/ (ECC Cursor install target). Resolved relative to the directory containing ecc-prune.json. When set, the same remove.* rules are applied under <cursorProjectRoot>/.cursor/ using Cursor's flat rules layout (namespace-*.md). Use \".\" when ecc-prune.json lives at the project root."
+    },
+    "remove": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rulesDirs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Subdirectory names under rules/ to delete entirely (e.g. php, perl)"
+        },
+        "agents": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Basenames under agents/ (with or without .md)"
+        },
+        "commands": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Basenames under commands/ (with or without .md)"
+        },
+        "skillDirs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Skill folder names under skills/ to delete"
+        }
+      }
+    },
+    "copyIntoClaudeHome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "AGENTS.md": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Replacement AGENTS.md → claudeHome/AGENTS.md; relative paths are resolved from the directory containing ecc-prune.json"
+        },
+        "plugin.json": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Replacement plugin manifest → claudeHome/plugin.json; relative paths are resolved from the directory containing ecc-prune.json"
+        }
+      }
+    }
+  }
+}

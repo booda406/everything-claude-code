@@ -1,0 +1,66 @@
+{
+  "$schema": "./schemas/ecc-prune-config.schema.json",
+  "version": 1,
+  "description": "自訂修剪：rules 語言包 + skills（對齊語言堆疊）+ agents",
+  "cursorProjectRoot": ".",
+  "remove": {
+    "rulesDirs": [
+      "java",
+      "kotlin",
+      "cpp",
+      "csharp",
+      "dart",
+      "swift",
+      "php",
+      "perl"
+    ],
+    "skillDirs": [
+      "android-clean-architecture",
+      "compose-multiplatform-patterns",
+      "cpp-coding-standards",
+      "cpp-testing",
+      "csharp-testing",
+      "dart-flutter-patterns",
+      "dotnet-patterns",
+      "flutter-dart-code-review",
+      "java-coding-standards",
+      "jpa-patterns",
+      "kotlin-coroutines-flows",
+      "kotlin-exposed-patterns",
+      "kotlin-ktor-patterns",
+      "kotlin-patterns",
+      "kotlin-testing",
+      "laravel-patterns",
+      "laravel-plugin-discovery",
+      "laravel-security",
+      "laravel-tdd",
+      "laravel-verification",
+      "perl-patterns",
+      "perl-security",
+      "perl-testing",
+      "springboot-patterns",
+      "springboot-security",
+      "springboot-tdd",
+      "springboot-verification",
+      "swift-actor-persistence",
+      "swift-concurrency-6-2",
+      "swift-protocol-di-testing",
+      "swiftui-patterns"
+    ],
+    "agents": [
+      "cpp-build-resolver",
+      "cpp-reviewer",
+      "csharp-reviewer",
+      "dart-build-resolver",
+      "flutter-reviewer",
+      "java-build-resolver",
+      "java-reviewer",
+      "kotlin-build-resolver",
+      "kotlin-reviewer"
+    ]
+  },
+  "copyIntoClaudeHome": {
+    "AGENTS.md": "./overlays/AGENTS.md",
+    "plugin.json": "./overlays/plugin.json"
+  }
+}

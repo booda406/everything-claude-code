@@ -1,4 +1,7 @@
 # Rules
+
+**Languages:** [繁體中文規則說明（docs）](../docs/zh-TW/rules/README.md)
+
 ## Structure
 
 Rules are organized into a **common** layer plus **language-specific** directories:

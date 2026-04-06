@@ -49,6 +49,10 @@ const COMMANDS = {
     script: 'uninstall.js',
     description: 'Remove ECC-managed files recorded in install-state',
   },
+  prune: {
+    script: 'apply-ecc-prune.js',
+    description: 'Remove rules/agents/commands/skills per ecc-prune.json (post-install)',
+  },
 };
 
 const PRIMARY_COMMANDS = [
@@ -62,6 +66,7 @@ const PRIMARY_COMMANDS = [
   'sessions',
   'session-inspect',
   'uninstall',
+  'prune',
 ];
 
 function showHelp(exitCode = 0) {
@@ -95,6 +100,8 @@ Examples:
   ecc sessions session-active --json
   ecc session-inspect claude:latest
   ecc uninstall --target antigravity --dry-run
+  ecc prune --dry-run
+  ecc prune --config ./ecc-prune.json
 `);
 
   process.exit(exitCode);

@@ -1,36 +1,33 @@
 # 安全性指南
 
+**English:** [`rules/common/security.md`](../../../rules/common/security.md)
+
 ## 強制安全性檢查
 
-任何提交前：
-- [ ] 沒有寫死的密鑰（API 金鑰、密碼、Token）
+**任何 commit 之前：**
+
+- [ ] 沒有寫死的密鑰（API key、密碼、token）
 - [ ] 所有使用者輸入已驗證
-- [ ] SQL 注入防護（參數化查詢）
-- [ ] XSS 防護（清理過的 HTML）
-- [ ] 已啟用 CSRF 保護
-- [ ] 已驗證驗證/授權
-- [ ] 所有端點都有速率限制
-- [ ] 錯誤訊息不會洩漏敏感資料
+- [ ] 防 SQL 注入（參數化查詢）
+- [ ] 防 XSS（HTML 需適當清理）
+- [ ] 已啟用 CSRF 防護
+- [ ] 已檢視驗證／授權邏輯
+- [ ] 所有端點有速率限制
+- [ ] 錯誤訊息不洩漏敏感資料
 
 ## 密鑰管理
 
-```typescript
-// 絕不：寫死的密鑰
-const apiKey = "sk-proj-xxxxx"
+- **切勿**在原始碼寫死密鑰。
+- **務必**使用環境變數或密鑰管理服務。
+- 啟動時驗證必要密鑰是否存在。
+- 任何已外洩或疑遭外洩的密鑰應**輪換**。
 
-// 總是：環境變數
-const apiKey = process.env.OPENAI_API_KEY
+## 安全事件處理
 
-if (!apiKey) {
-  throw new Error('OPENAI_API_KEY not configured')
-}
-```
+若發現安全問題：
 
-## 安全性回應協定
-
-如果發現安全性問題：
-1. 立即停止
-2. 使用 **security-reviewer** Agent
-3. 在繼續前修復關鍵問題
-4. 輪換任何暴露的密鑰
-5. 審查整個程式碼庫是否有類似問題
+1. **立刻停止**後續不相關作業。
+2. 使用 **security-reviewer** agent。
+3. **CRITICAL** 級別修補前暫停交付。
+4. 輪換已暴露的密鑰。
+5. 全庫掃描是否還有類似問題。

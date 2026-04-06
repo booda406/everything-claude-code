@@ -1,0 +1,48 @@
+{
+  "$schema": "../schemas/ecc-prune-config.schema.json",
+  "version": 1,
+  "description": "Example: copy to ecc-prune.json (repo root) or ~/ecc-prune.json, then run node scripts/apply-ecc-prune.js",
+  "cursorProjectRoot": ".",
+  "claudeHome": "",
+  "remove": {
+    "rulesDirs": [
+      "php",
+      "perl",
+      "swift",
+      "kotlin",
+      "java",
+      "csharp",
+      "dart",
+      "cpp",
+      "rust",
+      "golang"
+    ],
+    "agents": [
+      "kotlin-reviewer",
+      "java-reviewer",
+      "java-build-resolver",
+      "cpp-reviewer",
+      "cpp-build-resolver",
+      "dart-build-resolver",
+      "rust-reviewer",
+      "rust-build-resolver",
+      "go-reviewer",
+      "go-build-resolver",
+      "flutter-reviewer",
+      "pytorch-build-resolver"
+    ],
+    "commands": [
+      "jira.md",
+      "flutter-build.md"
+    ],
+    "skillDirs": [
+      "laravel-patterns",
+      "kotlin-patterns",
+      "cpp-testing"
+    ]
+  },
+  "copyIntoClaudeHome": {
+    "AGENTS.md": "./overlays/AGENTS.md",
+    "plugin.json": "./overlays/plugin.json"
+  }
+}
