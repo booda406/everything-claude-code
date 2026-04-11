@@ -211,7 +211,20 @@ gh pr diff N --repo OWNER/REPO
 
 ### 2.7 發佈到 GitHub（`gh` 可用時）
 
-將 **BLOCK/RISKY/OK** 與 **CRITICAL/HIGH** 狀況對應到 GitHub Review 事件（draft 僅 comment）：
+**必做：完整 artifact 上 PR（conversation）**  
+在依下表送出 **`gh pr review`**（Pull request review 事件）**之前或之後**，必須將 **2.6** 產物 **`ROOT/.claude/PRPs/reviews/pr-<N>-review.md` 全文** 貼成 **一般 PR 留言**（issue comment／conversation），讓只在 GitHub 網頁作業的人與其他 agent 能讀到完整 Findings、Validation、Gate、Severity→Action：
+
+```bash
+gh pr comment <N> --repo OWNER/REPO --body-file ROOT/.claude/PRPs/reviews/pr-<N>-review.md
+```
+
+（實務上 `ROOT` 為該次審查的 git 根目錄；`--repo` 與 PR 號依 Phase 0 解析。）
+
+- **不得**僅將完整報告留在本機檔案而不貼上 PR；亦**不得**只依 `gh pr review --body` 的短文代替全文（`gh pr review` 的 body 可短寫決策並註明「完整報告見上一則 `gh pr comment`」）。
+- 若超過 GitHub 單則留言上限（約 **65,536** 字元）：改以**多則** `gh pr comment` 分段貼上。
+- 若目標 repo 之 `CLAUDE.md`／團隊規範對發佈有更嚴格定義，以**專案規範**為準。
+
+**然後**將 **BLOCK/RISKY/OK** 與 **CRITICAL/HIGH** 狀況對應到 GitHub Review 事件（draft 僅 comment）：
 
 | 情境 | 建議 `gh pr review` |
 |------|---------------------|
@@ -323,7 +336,7 @@ gh pr diff N --repo OWNER/REPO
 
 | 情況 | 行為 |
 |------|------|
-| 無 `gh` | 見 Phase 0.1／2.7：本機 diff／讀檔、寫 artifact、不發佈 GitHub；於報告頂部註明。 |
+| 無 `gh` | 見 Phase 0.1／2.7：本機 diff／讀檔、寫 artifact；**無法**執行 `gh pr comment`／`gh pr review`；於報告頂部註明「未發佈至 GitHub」，並提醒人工貼上全文。 |
 | 分支與 base 嚴重分歧 | 見 2.1：提醒 `git fetch` 與 rebase／merge base；大 PR 見 2.1 限縮範圍策略。 |
 | 超大 PR（≥50 檔或等效） | 見 2.1：警告、優先源碼與測試再設定／文件。 |
 | `gh pr view`／API 找不到 PR | 停止該 PR 管線並回報錯誤（對齊 `/code-review`「PR not found」）。 |
@@ -343,7 +356,7 @@ Actions: <must_fix> must-fix, <should_fix> should-fix, <rec> recommended, <opt> 
 Validation: <passed>/<total> checks passed (或簡述 Fail/Skipped)
 Artifacts:
   Review: ROOT/.claude/PRPs/reviews/pr-<N>-review.md
-  GitHub: <PR URL 若已知>
+  GitHub: <PR URL 若已知>（須已或應以 `gh pr comment <N> --body-file …/pr-<N>-review.md` 同步**全文**至 PR 對話串）
 Next steps:
   - <依 Gate 與驗證結果列 1～3 條可執行後續>
 ```

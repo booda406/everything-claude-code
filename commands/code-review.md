@@ -230,7 +230,16 @@ Create review artifact at `.claude/PRPs/reviews/pr-<NUMBER>-review.md`:
 
 ### Phase 7 — PUBLISH
 
-Post the review to GitHub:
+**Full report on the PR (required when `gh` is available)**  
+After writing the Phase 6 artifact `.claude/PRPs/reviews/pr-<NUMBER>-review.md`, **always** post the **entire** markdown to the PR **conversation** so reviewers and agents working from GitHub.com can read it (not only a short `gh pr review` body):
+
+```bash
+gh pr comment <NUMBER> --body-file .claude/PRPs/reviews/pr-<NUMBER>-review.md
+```
+
+If the file exceeds GitHub’s per-comment limit (~65,536 characters), split across multiple `gh pr comment` calls. Do **not** leave the full report only on disk.
+
+Then post the **review event** (short body is OK; it may reference the full comment above):
 
 ```bash
 # If APPROVE
@@ -274,7 +283,7 @@ Validation: <pass_count>/<total_count> checks passed
 
 Artifacts:
   Review: .claude/PRPs/reviews/pr-<NUMBER>-review.md
-  GitHub: <PR URL>
+  GitHub: <PR URL>  (full markdown must be posted via `gh pr comment <NUMBER> --body-file …` when `gh` is available)
 
 Next steps:
   - <contextual suggestions based on decision>

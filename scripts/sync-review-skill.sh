@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Sync skills/review/SKILL.md to ~/.claude/skills/review/ and install the thin
 # /review command to ~/.claude/commands/ and ~/.cursor/commands/.
+# SKILL Phase 2.7: after writing pr-<N>-review.md, agents must `gh pr comment --body-file` the full report to the PR before/after `gh pr review`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

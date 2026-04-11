@@ -26,5 +26,8 @@ description: PR gatekeeper /review — open PR scan, Severity→Action, VALIDATE
 
 ## 注意
 
-- 需已安裝並登入 **`gh`** 才能發佈 GitHub review；否則依 skill 降級為僅產 artifact。
-- 本指令**不**取代 **`/code-review`**；單一 PR 深度驗證＋PRP 流程仍以 `commands/code-review.md` 為準。
+- 需已安裝並登入 **`gh`** 才能發佈至 GitHub；否則依 skill 降級為僅產 artifact。
+- **`gh` 可用且審查遠端 PR 時**：寫入 `ROOT/.claude/PRPs/reviews/pr-<N>-review.md` 後，**必須**再執行  
+  `gh pr comment <N> --repo OWNER/REPO --body-file ROOT/.claude/PRPs/reviews/pr-<N>-review.md`  
+  將**全文**貼至 PR 對話串，再視 Gate 送出 `gh pr review`（詳見 `skills/review/SKILL.md` **2.7**）。超字數則多則留言分段。
+- 本指令**不**取代 **`/code-review`**；單一 PR 深度驗證＋PRP 流程仍以 `commands/code-review.md` 為準（其 **Phase 7** 與本要求對齊）。
