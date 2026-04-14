@@ -37,7 +37,74 @@ disable-model-invocation: true
      - 若內容有價值但屬過渡 → 建議合併進正式文件（如 TESTING.md、某個 E2E 說明）後刪除原檔。
    - 將「建議更新／建議刪除或合併」的具體項目列出給使用者確認，再執行對應的編輯或刪除；若有爭議可交由使用者決定。
 
-4. **撰寫 commit message（英文、良好格式）**
+4. **Notion 專案同步（若 CLAUDE.md 有設定）**
+
+   讀取 `CLAUDE.md` 的 `## Notion Task Board` 區塊，取出 `Data source ID`。若不存在，跳過本步驟。
+
+   以頂尖 PM 的視角，根據本次工作段落（Step 1 歸納的變更 + 對話中浮現的問題），依序執行以下四個動作：
+
+   **4a. 關閉已完成的任務**
+   - 用 `notion-search`（指定 data source）找出與本次工作相關、尚未關閉的任務
+   - 確認真正完成（功能已上線或 PR 已 merge）才標 Done，**不確定就先跳過**
+   - 標 Done 後一律補 `## 完成記錄` 區塊（格式見下方），並將所有 Sub-tasks 勾選為 `- [x]`
+
+   ```markdown
+   ## 完成記錄
+
+   **完成日期**：YYYY-MM-DD
+   **關聯 PR**：PR #XX（一句話描述）
+
+   ### 實作方案
+   - 核心變更條列
+
+   ### 測試結果
+   - unit tests 通過情形
+   - E2E 驗證結果（若已完成）
+   ```
+
+   **4b. 建立新任務（工作中浮現的問題 / 衍生待辦）**
+   - 來源：本次修法過程中發現的 bug、技術債、或 review 指出但未在本 PR 處理的項目
+   - **先搜尋**確認無重複任務，再建立；若已有相關任務（狀態非 Done）→ 補充 evidence，不重複建立
+   - 若同一問題已關閉但今日發現 regression → 新建任務，標明「regression of #XX」
+
+   新任務欄位規範：
+
+   | 欄位 | 規則 |
+   |------|------|
+   | Task name | 一句話描述症狀，不用「Bug:」前綴 |
+   | Task type | Bug → `🐞 Bug`；新功能 → `💬 Feature request`；品質 → `💅 Polish`；重構 → `♻️ Refactor` |
+   | Priority | 生產事故級 → High；影響核心流程 → Medium；其他 → Low |
+   | Effort level | 影響面廣或根因複雜 → Medium/Large；局部修改 → Small |
+   | Status | `Not started` |
+   | Description | 症狀、影響範圍、發現來源（PR / session）、修正方向、Sub-tasks 框架 |
+
+   Sub-tasks 標準框架：
+   ```
+   ## Sub-tasks
+   - [ ] 問題分析
+   - [ ] 規劃修改
+   - [ ] 代碼修改
+   - [ ] 部署測試
+   - [ ] 文件更新
+   - [ ] 代碼上傳
+   ```
+
+   **4c. 更新進行中任務的進度**
+   - 今日有部分推進但未完成的任務 → 在 Description 補充最新進度與發現
+   - Scope 比預期大 → 調整 Effort level 或 Priority
+
+   **4d. 重新審視優先順序**
+   - 今日的修法是否讓某個舊任務失去意義？→ 標 `Tracking` 或 Cancelled，說明原因
+   - 有沒有新的高風險點浮現，需要立刻提升 Priority？
+
+   > **CLAUDE.md 設定範例**（各 repo 自行加入）：
+   > ```markdown
+   > ## Notion Task Board
+   > - **Data source ID**: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+   > - **Parent page**: https://www.notion.so/...
+   > ```
+
+5. **撰寫 commit message（英文、良好格式）**
    - 採用 **Conventional Commits** 風格：`type(scope): short description`
    - 常用 type：`feat`、`fix`、`refactor`、`docs`、`test`、`chore`
    - 內文用條列式列出主要變更，方便日後 `git log` 查閱
@@ -55,17 +122,18 @@ disable-model-invocation: true
      - **Claude（非 Cursor 包裝時）** 範例：`Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>`
      - **Gemini** 範例：`Co-authored-by: Gemini <gemini-cli@google.com>`
 
-5. **執行 commit**
+6. **執行 commit**
    - `git add -A` 將所有變更（含未追蹤的合理檔案）加入 staging
    - 若有**不應被 commit 的暫存檔**（例如僅用來寫 message 的 .txt），先 `git restore --staged <file>` 取消
    - 使用 `git commit -m "..."` 或 `git commit -F <message-file>` 送出
    - **若 log 底端出現非本流程撰寫的 `Made-with: Cursor`（或其它非預期尾註）**：多為 IDE／全域 **`commit-msg` hook** 自動附加。請以正確訊息 **`git commit --amend -F <message-file> --no-verify`** 重寫（`--no-verify` 略過該 hook）；**勿**在訊息中保留 `Made-with:`（與 **`skills/dev/SKILL.md`** 一致）。
    - commit 完成後，可刪除僅用於本次的暫存檔（如 message 檔）
 
-6. **回覆使用者**
+7. **回覆使用者**
    - 顯示 commit hash 與完整 message
    - 用簡表或條列摘要「今日工作內容」，方便留底或日報
-   - 提醒本次若有更新：**AI 行為規則**已同步記入 `CLAUDE.md` 與 `.cursor/rules/lessons-learned.mdc`，**實作／根因筆記**已記入 `docs/context/implementation-notes.md`。
+   - 提醒本次若有更新：**AI 行為規則**已同步記入 `CLAUDE.md` 與 `.cursor/rules/lessons-learned.mdc`，**實作／根因筆記**已記入 `docs/context/implementation-notes.md`
+   - 若執行了 Step 4，摘要 Notion 更新結果：關閉哪些任務、新建哪些任務、調整哪些 Priority
 
 ## 使用者規則提醒
 
