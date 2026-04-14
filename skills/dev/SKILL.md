@@ -295,13 +295,16 @@ body 含 **Summary**、**變更檔案**、**Test plan**、**Closes #N／Refs #N*
 
 建議再執行 **`/code-review <PR#>`**（見 Step 5b）。
 
+**審查已由 agent（例如 `/review`）貼上 GitHub 後**：可執行 **`/pr-followup <PR#>`**（選 **`--watch`** 輪詢直到守門留言出現）做 **CI／Gate 確認、合併授權與分支清理**；細節見 **`skills/pr-followup/SKILL.md`**。若審查要求改 code，回到 **Step 4** 或新開一輪 **`/dev`**（附 PR 連結）。
+
 ---
 
 ## Step 8：回報完成
 
 PR URL、檢查與測試摘要、Notion／issue 是否改 **In review**、部署驗證待辦。
 
-> **PR 合併、階段收工後**：執行 **`/commit`** 做 lessons learned 與文件整理。
+> **PR 合併、階段收工後**：執行 **`/commit`** 做 lessons learned 與文件整理。  
+> **合併前若需協調 CI／Gate／merge 指令**：可用 **`/pr-followup`**（與 **`/review`** 產出銜接；見 `skills/pr-followup/SKILL.md`）。
 
 ---
 

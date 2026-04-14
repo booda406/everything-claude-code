@@ -390,3 +390,5 @@ Next steps:
 - 在 `CLAUDE.md` 頂部附近：`review-coordination-issue: 8`
 - 僅審工作區（對齊 `/code-review`「空白參數 → Local」之體驗，但本 skill 預設掃 PR，故需明示）：`/review --local` 或說明「只審本地未提交變更」
 - 訊息含 **`--pr`** 且搭配 PR 號／URL 時：視為強調 **PR 管線**，仍可依 Phase 0 解析 repo；若同時要略過全倉 open PR 掃描，應以使用者是否「只審這一個 PR」的指示為準。
+
+**審查結論已上 PR 之後（合併／CI／分支收尾）**：交 **`/pr-followup <N>`** 或 **`/pr-followup --watch <N>`**（輪詢直到守門留言落地），見 **`skills/pr-followup/SKILL.md`**；本 **`/review` skill 不**負責 merge。
