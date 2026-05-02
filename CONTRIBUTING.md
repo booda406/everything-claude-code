@@ -60,8 +60,9 @@ git checkout -b feat/my-contribution
 # 3. Add your contribution (see sections below)
 
 # 4. Test locally
-cp -r skills/my-skill ~/.claude/skills/  # for skills
-# Then test with Claude Code
+npm run sync:harnesses -- --skill my-skill   # or full: npm run sync:harnesses
+# (copies agents + selected skills to ~/.claude and ~/.cursor — see scripts/sync-ecc-harnesses.js --help)
+# Then test with Claude Code / Cursor
 
 # 5. Submit PR
 git add . && git commit -m "feat: add my-skill" && git push -u origin feat/my-contribution
