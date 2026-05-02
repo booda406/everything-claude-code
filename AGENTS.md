@@ -1,6 +1,6 @@
 # Everything Claude Code (ECC) — Agent Instructions
 
-This is a **production-ready AI coding plugin** providing 38 specialized agents, 156 skills, 72 commands, and automated hook workflows for software development.
+This is a **production-ready AI coding plugin** providing 39 specialized agents, 163 skills, 78 commands, and automated hook workflows for software development.
 
 **Version:** 1.9.0
 
@@ -18,6 +18,7 @@ This is a **production-ready AI coding plugin** providing 38 specialized agents,
 |-------|---------|-------------|
 | planner | Implementation planning | Complex features, refactoring |
 | architect | System design and scalability | Architectural decisions |
+| ui-ux-designer | UX planning, IA, design-system direction, heuristic and a11y review | New or redesigned UI, unclear UX, pre-launch UI polish, structured handoff to eng |
 | tdd-guide | Test-driven development | New features, bug fixes |
 | code-reviewer | Code quality and maintainability | After writing/modifying code |
 | security-reviewer | Vulnerability detection | Before commits, sensitive code |
@@ -47,6 +48,7 @@ This is a **production-ready AI coding plugin** providing 38 specialized agents,
 
 Use agents proactively without user prompt:
 - Complex feature requests → **planner**
+- Significant UI/UX uncertainty (flows, IA, design system, accessibility) → **ui-ux-designer**
 - Code just written/modified → **code-reviewer**
 - Bug fix or new feature → **tdd-guide**
 - Architectural decision → **architect**
@@ -145,9 +147,9 @@ Troubleshoot failures: check test isolation → verify mocks → fix implementat
 ## Project Structure
 
 ```
-agents/          — 38 specialized subagents
-skills/          — 156 workflow skills and domain knowledge
-commands/        — 72 slash commands
+agents/          — 39 specialized subagents
+skills/          — 163 workflow skills and domain knowledge
+commands/        — 78 slash commands
 hooks/           — Trigger-based automations
 rules/           — Always-follow guidelines (common + per-language)
 scripts/         — Cross-platform Node.js utilities

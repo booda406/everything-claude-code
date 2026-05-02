@@ -5,7 +5,7 @@
 > **Canonical full agent list** (merge-friendly with upstream): repository root [`AGENTS.md`](../AGENTS.md).  
 > To **restore** removed agents: delete them from `ecc-prune.json` → `remove.agents` / `remove.rulesDirs`, re-run `install.sh`, and remove or adjust these overlays.
 
-This overlay describes **29** agent roles after `ecc-prune` removes unused language-specific agents (C++, C#, Dart/Flutter, Java, Kotlin stacks). Count matches remaining `agents/*.md` files once prune is applied.
+This overlay describes **30** agent roles after `ecc-prune` removes unused language-specific agents (C++, C#, Dart/Flutter, Java, Kotlin stacks). Count matches remaining `agents/*.md` files once prune is applied.
 
 **Version:** 1.9.0
 
@@ -23,6 +23,7 @@ This overlay describes **29** agent roles after `ecc-prune` removes unused langu
 |-------|---------|-------------|
 | planner | Implementation planning | Complex features, refactoring |
 | architect | System design and scalability | Architectural decisions |
+| ui-ux-designer | UX planning, IA, design-system direction, heuristic and a11y review | New or redesigned UI, unclear UX, pre-launch UI polish, structured handoff to eng |
 | tdd-guide | Test-driven development | New features, bug fixes |
 | code-reviewer | Code quality and maintainability | After writing/modifying code |
 | security-reviewer | Vulnerability detection | Before commits, sensitive code |
@@ -47,6 +48,7 @@ This overlay describes **29** agent roles after `ecc-prune` removes unused langu
 Use agents proactively without user prompt:
 
 - Complex feature requests → **planner**
+- Significant UI/UX uncertainty (flows, IA, design system, accessibility) → **ui-ux-designer**
 - Code just written/modified → **code-reviewer**
 - Bug fix or new feature → **tdd-guide**
 - Architectural decision → **architect**
@@ -149,7 +151,7 @@ Troubleshoot failures: check test isolation → verify mocks → fix implementat
 ## Project Structure (after prune)
 
 ```
-agents/          — 29 specialized subagents (see ecc-prune.json)
+agents/          — 30 specialized subagents (see ecc-prune.json)
 skills/          — 156 workflow skills and domain knowledge
 commands/        — 72 slash commands
 hooks/           — Trigger-based automations

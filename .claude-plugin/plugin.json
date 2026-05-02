@@ -50,7 +50,8 @@
     "./agents/rust-reviewer.md",
     "./agents/security-reviewer.md",
     "./agents/tdd-guide.md",
-    "./agents/typescript-reviewer.md"
+    "./agents/typescript-reviewer.md",
+    "./agents/ui-ux-designer.md"
   ],
   "skills": ["./skills/"],
   "commands": ["./commands/"]
