@@ -28,6 +28,13 @@ disable-model-invocation: true
 - PR 狀態清楚（是否皆已關閉）
 - CI / Deploy 狀態清楚（成功/失敗/進行中）
 
+**分支清理補充**：
+- 已合併的 feature branch 應刪除；同時執行 `git remote prune <remote>`（通常為 `github` 或 `origin`）清理 stale remote tracking refs。
+- **Worktree 限制**：若目前執行環境是 Claude Code worktree（`.claude/worktrees/<name>`），`git checkout main` 會失敗（main 已被 worktree 佔用）。刪除已合併分支改用 `git branch -D <branch>`（force-delete，不需先切換）。若目標分支是主 repo 當前的 HEAD，則無法從 worktree 刪除，**必須在結案摘要中告知使用者手動執行**：
+  ```bash
+  git checkout main && git branch -d <branch>
+  ```
+
 ---
 
 ## Step 2：文件同步與知識沉澱
