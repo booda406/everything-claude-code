@@ -48,6 +48,7 @@ The project is organized into several core components:
 - Agent format: Markdown with YAML frontmatter (name, description, tools, model)
 - Skill format: Markdown with clear sections for when to use, how it works, examples
 - Skill placement: Curated in skills/; generated/imported under ~/.claude/skills/. See docs/SKILL-PLACEMENT-POLICY.md
+- After adding agents or skills locally, push them into Claude Code and Cursor user dirs: `npm run sync:harnesses` or `npm run sync:harnesses -- --skill ui-ux-pro-max` (see `scripts/sync-ecc-harnesses.js --help`)
 - Hook format: JSON with matcher conditions and command/notification hooks
 
 ## Contributing
