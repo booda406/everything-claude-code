@@ -35,9 +35,15 @@ function runTests() {
     const o = parseArgs(['node', 'x.js']);
     assert.strictEqual(o.dryRun, false);
     assert.strictEqual(o.agents, true);
+    assert.strictEqual(o.agentFilter, null);
     assert.deepStrictEqual(o.skills, []);
     assert.strictEqual(o.claude, true);
     assert.strictEqual(o.cursor, true);
+  })) passed++; else failed++;
+
+  if (test('parseArgs --agent / --only-agent', () => {
+    const o = parseArgs(['node', 'x.js', '--agent', 'ui-ux-designer', '--only-agent', 'planner.md']);
+    assert.deepStrictEqual(o.agentFilter, ['ui-ux-designer.md', 'planner.md']);
   })) passed++; else failed++;
 
   if (test('parseArgs --skill twice', () => {
@@ -63,7 +69,7 @@ function runTests() {
     const logs = [];
     syncForRoots(
       repoRoot,
-      { dryRun: false, agents: true, skills: [], allSkills: false },
+      { dryRun: false, agents: true, agentFilter: null, skills: [], allSkills: false },
       [tmp],
       m => logs.push(m)
     );
@@ -78,12 +84,32 @@ function runTests() {
     const repoRoot = path.join(__dirname, '../..');
     syncForRoots(
       repoRoot,
-      { dryRun: false, agents: false, skills: ['ui-ux-pro-max'], allSkills: false },
+      { dryRun: false, agents: false, agentFilter: null, skills: ['ui-ux-pro-max'], allSkills: false },
       [tmp],
       () => {}
     );
     assert.ok(fs.existsSync(path.join(tmp, 'skills', 'ui-ux-pro-max', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmp, 'skills', 'ui-ux-pro-max', 'scripts', 'search.py')));
+    fs.rmSync(tmp, { recursive: true, force: true });
+  })) passed++; else failed++;
+
+  if (test('syncForRoots copies only listed agents when agentFilter set', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-sync-'));
+    const repoRoot = path.join(__dirname, '../..');
+    syncForRoots(
+      repoRoot,
+      {
+        dryRun: false,
+        agents: true,
+        agentFilter: ['planner.md'],
+        skills: [],
+        allSkills: false,
+      },
+      [tmp],
+      () => {}
+    );
+    const agentFiles = fs.readdirSync(path.join(tmp, 'agents')).filter(f => f.endsWith('.md'));
+    assert.deepStrictEqual(agentFiles, ['planner.md']);
     fs.rmSync(tmp, { recursive: true, force: true });
   })) passed++; else failed++;
 

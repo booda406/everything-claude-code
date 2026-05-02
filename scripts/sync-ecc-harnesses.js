@@ -6,7 +6,7 @@
  *
  * Usage:
  *   node scripts/sync-ecc-harnesses.js
- *   node scripts/sync-ecc-harnesses.js --skill ui-ux-pro-max
+ *   node scripts/sync-ecc-harnesses.js --agent ui-ux-designer --skill ui-ux-pro-max
  *   node scripts/sync-ecc-harnesses.js --skill ui-ux-pro-max --dry-run
  *   node scripts/sync-ecc-harnesses.js --project "$PWD" --skill ui-ux-pro-max
  */
@@ -21,6 +21,7 @@ function parseArgs(argv) {
   const out = {
     dryRun: false,
     agents: true,
+    agentFilter: null,
     skills: [],
     allSkills: false,
     claude: true,
@@ -33,6 +34,16 @@ function parseArgs(argv) {
     if (a === '--dry-run') out.dryRun = true;
     else if (a === '--no-agents') out.agents = false;
     else if (a === '--all-skills') out.allSkills = true;
+    else if (a === '--agent' || a === '--only-agent') {
+      const v = argv[i + 1];
+      if (!v || v.startsWith('--')) {
+        throw new Error(`${a} requires an agent basename (e.g. ui-ux-designer or ui-ux-designer.md)`);
+      }
+      if (out.agentFilter === null) out.agentFilter = [];
+      const base = v.endsWith('.md') ? v : `${v}.md`;
+      out.agentFilter.push(base);
+      i += 1;
+    }
     else if (a === '--claude-only') {
       out.claude = true;
       out.cursor = false;
@@ -72,6 +83,8 @@ Usage:
 Options:
   --dry-run           Print planned copies only
   --no-agents         Do not copy agents/*.md
+  --agent <name>      Copy only agents/<name>.md (repeatable); omit extension or use .md
+  --only-agent <name> Same as --agent
   --skill <name>      Also copy skills/<name>/ (repeatable)
   --all-skills        Copy every skills/*/ that has SKILL.md (large)
   --claude-only       Only ~/.claude/
@@ -83,6 +96,7 @@ Defaults:
 
 Examples:
   node scripts/sync-ecc-harnesses.js
+  node scripts/sync-ecc-harnesses.js --agent ui-ux-designer --skill ui-ux-pro-max
   node scripts/sync-ecc-harnesses.js --skill ui-ux-pro-max
   node scripts/sync-ecc-harnesses.js --project . --skill ui-ux-pro-max
 `;
@@ -127,12 +141,21 @@ function copyDirRecursive(srcDir, destDir, dryRun, log) {
   }
 }
 
-function copyAgents(repoRoot, destAgentsDir, dryRun, log) {
+function copyAgents(repoRoot, destAgentsDir, dryRun, log, agentFilter) {
   const srcDir = path.join(repoRoot, 'agents');
   if (!fs.existsSync(srcDir)) {
     throw new Error(`Missing ${srcDir}`);
   }
-  const files = fs.readdirSync(srcDir).filter(f => f.endsWith('.md'));
+  const allMd = fs.readdirSync(srcDir).filter(f => f.endsWith('.md'));
+  let files = allMd;
+  if (agentFilter != null && agentFilter.length > 0) {
+    for (const name of agentFilter) {
+      if (!allMd.includes(name)) {
+        throw new Error(`Agent not found in repo agents/: ${name}`);
+      }
+    }
+    files = [...agentFilter];
+  }
   for (const file of files) {
     copyFile(path.join(srcDir, file), path.join(destAgentsDir, file), dryRun, log);
   }
@@ -150,7 +173,13 @@ function copySkill(repoRoot, skillName, destSkillsRoot, dryRun, log) {
 function syncForRoots(repoRoot, options, roots, log) {
   for (const root of roots) {
     if (options.agents) {
-      copyAgents(repoRoot, path.join(root, 'agents'), options.dryRun, log);
+      copyAgents(
+        repoRoot,
+        path.join(root, 'agents'),
+        options.dryRun,
+        log,
+        options.agentFilter
+      );
     }
     const skillNames = options.allSkills
       ? listSkillDirs(path.join(repoRoot, 'skills'))
@@ -174,6 +203,12 @@ function main() {
   if (options.help) {
     console.log(helpText());
     process.exit(0);
+    return;
+  }
+
+  if (!options.agents && options.agentFilter != null && options.agentFilter.length > 0) {
+    console.error('Cannot combine --no-agents with --agent / --only-agent.');
+    process.exit(1);
     return;
   }
 

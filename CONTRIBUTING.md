@@ -60,8 +60,8 @@ git checkout -b feat/my-contribution
 # 3. Add your contribution (see sections below)
 
 # 4. Test locally
-npm run sync:harnesses -- --skill my-skill   # or full: npm run sync:harnesses
-# (copies agents + selected skills to ~/.claude and ~/.cursor — see scripts/sync-ecc-harnesses.js --help)
+npm run sync:harnesses -- --agent my-agent --skill my-skill   # or all agents: npm run sync:harnesses
+# (see scripts/sync-ecc-harnesses.js --help)
 # Then test with Claude Code / Cursor
 
 # 5. Submit PR
