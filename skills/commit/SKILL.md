@@ -25,10 +25,12 @@ disable-model-invocation: true
        - **`.cursor/rules/lessons-learned.mdc`**：Cursor 讀取用
        範例：Commit 前必須全量 git diff、重構後要檢查 import、部署問題先本機釐清、containedIn 過長要分批、mock 要覆蓋 named exports。
        格式：簡短規則 + 必要時 do/don't 範例；不寫成單次修法紀錄。
+       **重要**：這類修改**必須在觸發它的功能 PR 的同一 branch 上 commit**，隨功能一起進 PR，**不可**等功能 PR 合併後再補開獨立薄 PR。若已錯過，在下一個功能 PR 帶入，而非單獨開一個 2 行的 docs PR。
      - **專案實作／根因筆記**（單次修法、根因分析、規格決定）→ 更新 **`docs/context/implementation-notes.md`**
        範例：某次統計 fallback 順序修正、某次 RangeError 根因與 patch、Print 斗燈 arrObj 修法、睡眠喚醒 loadWithTimeout 實作。
        格式：日期 + 標題 + 現象/根因/修法，供人類查閱與除錯。
    - **判斷標準**：若「三個月後你還會對 AI 說一次」→ 行為規則；若「查 code 或除錯時才會翻」→ 實作筆記。
+   - **Skill 自我更新**：若本次 session 發現 `/commit`、`/done`、`/dev` 等 skill 本身有流程缺口（例如步驟遺漏、說明不夠清楚、與實際最佳做法不符），**同步更新對應的 `SKILL.md`**，不要只記在 `lessons-learned.mdc` 而讓 skill 繼續誤導下次執行。
 
 3. **文件檢視與整理**
    - **該更新的要更新**：依今日程式變更，檢查 `docs/` 與 README 是否需同步更新（例如架構改動後更新 ARCHITECTURE.md、FOLDER_STRUCTURE.md；新增功能或流程時更新 TESTING.md、TROUBLESHOOTING.md、README 連結等）。
@@ -45,6 +47,7 @@ disable-model-invocation: true
 
    **4a. 關閉已完成的任務**
    - 用 `notion-search`（指定 data source）找出與本次工作相關、尚未關閉的任務
+   - **只搜主看板不夠**：若專案同時有 bug 回報、feature request 等獨立 DB，**必須也掃這些 DB**，找所有功能描述與本次實作有交集的 Pending／New 項目一併標 Done。搜尋至少兩個 query 角度（功能名稱 + 技術關鍵字），不可搜一次就說「沒有遺漏」。
    - 確認真正完成（功能已上線或 PR 已 merge）才標 Done，**不確定就先跳過**
    - 標 Done 後一律補 `## 完成記錄` 區塊（格式見下方），並將所有 Sub-tasks 勾選為 `- [x]`
 

@@ -43,8 +43,10 @@ disable-model-invocation: true
 - 三個月後還會再次提醒 AI 的規範 → 行為準則
 - 主要給人查歷史脈絡與除錯復盤 → implementation notes
 
+**Skill 自我更新**：若本次 session 發現 `/commit`、`/done`、`/dev` 等 skill 本身有流程缺口（步驟遺漏、說明不清、與最佳做法不符），**同步更新對應的 `SKILL.md`**，不要只記在 `lessons-learned.mdc` 而讓 skill 繼續誤導下次執行。
+
 文件更新完成後，需在回覆中列出：
-- 更新了哪些檔案
+- 更新了哪些檔案（含 skill 檔案）
 - 每個檔案新增了什麼重點
 
 ---
@@ -53,7 +55,10 @@ disable-model-invocation: true
 
 若 `CLAUDE.md` 或專案規範要求同步 Notion：
 
-1. 關閉已完成任務（補完成記錄）
+1. **關閉已完成任務（補完成記錄）**
+   - 先更新主任務看板（TSK-xxx 等工程任務）
+   - **同時掃其他相關 DB**（如 bug 回報、feature request 等獨立資料庫）：找所有功能描述與本次實作有交集的 Pending／New 項目一併標 Done 並補完成記錄
+   - 至少用兩個 query 角度搜尋，不可搜一次就說「沒有遺漏」
 2. 建立本次衍生待辦（避免重複）
 3. 更新進行中任務進度
 4. 重整優先級（若今日風險改變）
