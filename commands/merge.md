@@ -17,7 +17,7 @@ argument-hint: PR 編號（例如 24）
 
 2. **`~/.claude/skills/merge/SKILL.md`** — 在**非 ECC 根目錄**開啟 Claude Code 時讀此檔。（由 `bash scripts/sync-merge-skill.sh` 從 ECC 之 `skills/merge/SKILL.md` 同步。）
 
-讀到後，依該檔之 **Step 1 → 5** 完整執行。
+讀到後，依該檔之 **Step 1 → 6** 完整執行。
 
 ## 使用者輸入
 

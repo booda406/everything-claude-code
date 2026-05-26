@@ -32,20 +32,55 @@ gh pr checks <PR 編號>
 
 ---
 
-## Step 2：確認 PR 內容（快速回顧）
+## Step 2：確認 PR 狀態與 mergeability
 
 ```bash
-gh pr view <PR 編號>
+gh pr view <PR 編號> --json number,title,state,baseRefName,headRefName,mergeable,mergeStateStatus,reviewDecision,url
 ```
 
 確認：
 - PR 狀態為 `OPEN`
 - 目標 branch 為 `main`
+- `mergeable` 必須是 `MERGEABLE`
+- `mergeStateStatus` 不可為 `DIRTY` / `BLOCKED` / `UNKNOWN`。若為 `UNKNOWN`，等待 GitHub 重新計算後再查一次；仍不明確就停止。
 - 無 `BLOCK` 標記（來自 /review 的 CRITICAL/HIGH 問題未解決）
+
+若 PR 為 `CONFLICTING`、`DIRTY`、或 GitHub 顯示需要更新 branch，**停止 merge**，告知用戶需要先 rebase/merge latest `main`、解衝突、重新跑 CI 與必要 review。
 
 ---
 
-## Step 3：Squash Merge
+## Step 3：Batch / consecutive merge guard（連續合併防護）
+
+若本次要連續 merge 多個 PR，或本輪對話中剛 merge 過其他 PR，對每一個「下一個 PR」必須重新執行 Step 1 和 Step 2；不得沿用先前查到的狀態。
+
+每合併一個 PR 後，先同步 local main：
+
+```bash
+git checkout main
+REMOTE=$(git remote | head -1)
+git pull "$REMOTE" main
+```
+
+然後重新檢查下一個 PR：
+
+```bash
+gh pr checks <下一個 PR 編號>
+gh pr view <下一個 PR 編號> --json number,title,state,baseRefName,headRefName,mergeable,mergeStateStatus,reviewDecision,url
+```
+
+另外檢查檔案重疊風險：
+
+```bash
+gh pr diff <下一個 PR 編號> --name-only
+```
+
+- 若下一個 PR 與剛合併的 PR 修改相同檔案，或都修改 CI/CD、依賴、路由、schema、shared component 等高影響面，提醒用戶「需要重新 review 或至少重新確認整合風險」。
+- 若 GitHub 回報不再 mergeable、CI 不是全綠、或 base 已落後造成狀態不明，**停止**；先更新該 PR branch 到最新 `main`、解衝突、重新跑 CI。
+- 若懷疑兩個 PR 各自綠但合起來可能壞掉，建議先建立 integration branch 或使用 GitHub Merge Queue，跑整合 CI 後再合併。
+
+---
+
+## Step 4：Squash Merge
 
 採用 **Squash merge**（本流程 best practice）：
 
@@ -90,7 +125,7 @@ Co-Authored-By: <自識別結果>" \
 
 ---
 
-## Step 4：同步 local main
+## Step 5：同步 local main
 
 ```bash
 git checkout main
@@ -105,7 +140,7 @@ git log --oneline -5
 
 ---
 
-## Step 5：回報完成
+## Step 6：回報完成
 
 告知用戶：
 - ✅ Merge 完成，commit SHA 與 message
