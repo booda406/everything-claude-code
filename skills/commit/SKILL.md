@@ -75,11 +75,13 @@ disable-model-invocation: true
    | 欄位 | 規則 |
    |------|------|
    | Task name | 一句話描述症狀，不用「Bug:」前綴 |
-   | Task type | Bug → `🐞 Bug`；新功能 → `💬 Feature request`；品質 → `💅 Polish`；重構 → `♻️ Refactor` |
+   | Task type | Bug → Bug；新功能 → Feature request；品質 → Polish；重構 → Refactor（右側僅語意標籤；實際值依下方 schema 規則） |
    | Priority | 生產事故級 → High；影響核心流程 → Medium；其他 → Low |
    | Effort level | 影響面廣或根因複雜 → Medium/Large；局部修改 → Small |
    | Status | `Not started` |
    | Description | 症狀、影響範圍、發現來源（PR / session）、修正方向、Sub-tasks 框架 |
+
+   **Task type 寫入規則**：先讀取目標 data source 的 schema，依上述語意對應唯一的既有選項，使用該選項完整的 `name` 原字串（包含原值既有的圖示前綴及 variation selector，若有），依欄位型別傳入；不可直接把表格標籤當成選項值、刪除前綴或自行新增選項。若專案使用其他分類欄位，遵循專案已設定的 schema 對照；若沒有該欄位或無法唯一對應，略過該欄位並回報待確認，不猜值。
 
    Sub-tasks 標準框架：
    ```

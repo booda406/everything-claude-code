@@ -391,4 +391,12 @@ Next steps:
 - 僅審工作區（對齊 `/code-review`「空白參數 → Local」之體驗，但本 skill 預設掃 PR，故需明示）：`/review --local` 或說明「只審本地未提交變更」
 - 訊息含 **`--pr`** 且搭配 PR 號／URL 時：視為強調 **PR 管線**，仍可依 Phase 0 解析 repo；若同時要略過全倉 open PR 掃描，應以使用者是否「只審這一個 PR」的指示為準。
 
-**審查結論已上 PR 之後（合併／CI／分支收尾）**：交 **`/pr-followup <N>`** 或 **`/pr-followup --watch <N>`**（輪詢直到守門留言落地），見 **`skills/pr-followup/SKILL.md`**；本 **`/review` skill 不**負責 merge。
+## 審查後的跟進與合併
+
+`/review` 負責審查、artifact 與審查結論；完成審查不代表已合併。依目前狀態在 `Next steps` 分流：
+
+- **有必改項、衝突或失敗檢查**：回 `/dev` 修正，再對更新後的版本重驗。
+- **需要等待審查／CI 或整理多輪回饋**：選用 [`/pr-followup <N>`](../pr-followup/SKILL.md)；需要輪詢時才加 `--watch`。它不是每次 `/review` 的完成條件，也不是合併前置步驟。
+- **最新有效審查與必要檢查已就緒，且已有有效合併授權**：可直接交 [`/merge`](../merge/SKILL.md)，不必先跑 `/pr-followup`。最新 head／base SHA、專案目標分支、既有授權與實際合併結果，由 `/merge` 統一核對及執行；本 skill 不另定合併門檻，也不自行合併。
+- **尚無有效合併授權**：回報就緒程度與待決事項，不執行合併。Gate OK、CI 綠或只授權審查本身不構成合併授權；仍有效的既有授權交接給 `/merge` 沿用，不因交接重問。
+- **只有本地審查、沒有 PR**：回報本地結果，不要求 PR 跟進或合併。

@@ -66,7 +66,9 @@ const targetedReplacements = [
 ];
 
 function shouldSkip(entryPath) {
-  return entryPath.split(path.sep).some(part => ignoredDirs.has(part));
+  const relativeParts = path.relative(repoRoot, entryPath).split(path.sep);
+  const isNestedClaudeWorktree = relativeParts[0] === '.claude' && relativeParts[1] === 'worktrees';
+  return isNestedClaudeWorktree || entryPath.split(path.sep).some(part => ignoredDirs.has(part));
 }
 
 function isTextFile(filePath) {

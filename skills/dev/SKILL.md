@@ -295,7 +295,16 @@ body 含 **Summary**、**變更檔案**、**Test plan**、**Closes #N／Refs #N*
 
 建議再執行 **`/code-review <PR#>`**（見 Step 5b）。
 
-**審查已由 agent（例如 `/review`）貼上 GitHub 後**：可執行 **`/pr-followup <PR#>`**（選 **`--watch`** 輪詢直到守門留言出現）做 **CI／Gate 確認、合併授權與分支清理**；細節見 **`skills/pr-followup/SKILL.md`**。若審查要求改 code，回到 **Step 4** 或新開一輪 **`/dev`**（附 PR 連結）。
+**`/pr-followup` 維持選用，不是每次 `/dev` 的完成條件。** PR 建立後依狀態分流：
+
+| 狀態 | 下一步 |
+|---|---|
+| 本次只要求本地結果，沒有 PR | 回報本地結果，不進入 PR 跟進或合併 |
+| 審查或 CI 尚待回饋，或需要整理多輪結果 | 可用 `/pr-followup <PR#>`；需要等待時才加 `--watch` |
+| 審查與必要檢查已就緒，且已有本 PR 的合併授權 | 直接依 [`skills/merge/SKILL.md`](../merge/SKILL.md) 執行，不要求先跑 `/pr-followup` |
+| 有必改項、衝突或失敗檢查 | 回 Step 4 或新一輪 `/dev`，附 PR 與待修項 |
+
+**合併門檻由 `/merge` 統一管理**：核對目前 `headRefOid`、專案目標 `BASE`／`baseRefOid`、對應版本的審查與 CI，以及本對話仍有效的授權。Step 5 的本地通過結果不是 PR 最新提交的遠端檢查證據；修改或 push 後重新核對。記錄使用者先前授權的 repo、PR、目標分支與限制，交接時沿用，不為同一有效範圍重問；只授權開發或追蹤狀態時，不推定可合併。
 
 ---
 
@@ -304,7 +313,7 @@ body 含 **Summary**、**變更檔案**、**Test plan**、**Closes #N／Refs #N*
 PR URL、檢查與測試摘要、Notion／issue 是否改 **In review**、部署驗證待辦。
 
 > **PR 合併、階段收工後**：執行 **`/commit`** 做 lessons learned 與文件整理。  
-> **合併前若需協調 CI／Gate／merge 指令**：可用 **`/pr-followup`**（與 **`/review`** 產出銜接；見 `skills/pr-followup/SKILL.md`）。
+> **合併前若需等待或協調 CI／Gate**：才選用 **`/pr-followup`**；已就緒可直接交 **`/merge`**。回報分開列出開發、PR、合併、部署與驗收狀態，不把其中一項完成當成全部完成。
 
 ---
 

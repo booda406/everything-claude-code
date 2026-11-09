@@ -243,7 +243,7 @@ def rebuild_colors():
         writer.writerows(final_rows)
 
     product_count = len(products)
-    print(f"\n  ✅ colors.csv: {len(final_rows)} rows ({product_count} products)")
+    print(f"\n  PASS: colors.csv: {len(final_rows)} rows ({product_count} products)")
     print(f"     Added: {added} new color rows")
 
 # ─── 2. REBUILD ui-reasoning.csv ─────────────────────────────────────────────
@@ -401,7 +401,7 @@ def rebuild_ui_reasoning():
         writer.writeheader()
         writer.writerows(final_rows)
 
-    print(f"\n  ✅ ui-reasoning.csv: {len(final_rows)} rows")
+    print(f"\n  PASS: ui-reasoning.csv: {len(final_rows)} rows")
     print(f"     Added: {added} new reasoning rows")
 
 
@@ -411,4 +411,4 @@ if __name__ == "__main__":
     rebuild_colors()
     print("\n=== Rebuilding ui-reasoning.csv ===")
     rebuild_ui_reasoning()
-    print("\n🎉 Done!")
+    print("\nDone!")

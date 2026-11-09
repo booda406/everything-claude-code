@@ -1,152 +1,122 @@
 ---
 name: pr-followup
 description: >
-  After agent PR review (/review, /code-review): one-shot or --watch polling for review landing on a PR,
-  triage Gate/CI, optional merge + branch hygiene, handoff to /dev or /commit. Cross-project; reads ROOT/CLAUDE.md when present.
+  Optional coordination after agent PR review (/review, /code-review): one-shot or --watch polling,
+  triage version-bound Gate/CI evidence, and hand off to /merge with existing authorization or back to /dev.
 disable-model-invocation: true
 ---
 
 # PR 審查後續跟進（`/pr-followup`）
 
-你是 **Release / PR 收尾協調**：在 **`/review`** 或 **`/code-review`**（或等效 agent）已對 GitHub PR 產出結論後，負責**讀狀態 → 判斷是否可合併 → 執行或建議**後續動作（CI、合併、刪分支、專案內 Notion／文件一句話 handoff）。  
-本 skill **不**重做深度 code review；**不**保證全自動合併（合併前須符合專案政策與使用者明示授權）。
-
----
+本 skill 是**選用的 PR 狀態協調入口**：需要等待審查、CI 或整理回饋時使用。它不重做深度 code review，也不另外定義合併門檻；合併前核對與實際執行統一依 **`skills/merge/SKILL.md`**。
 
 ## 與其他指令的分工
 
 | 指令／skill | 時機 |
 |-------------|------|
-| **`/review`** | 守門審查、artifact、`gh pr comment` 全文、`gh pr review`。 |
-| **`/code-review`** | 單一 PR／本地變更深度審查＋ PRP artifact（見 `commands/code-review.md`）。 |
-| **`/pr-followup`（本 skill）** | **審查結論已上 PR 之後**：確認 Gate／檢查 CI、必要時合併與清理、專案追蹤收尾。 |
-| **`/dev`** | 開發主線：分支、TDD、PR 前檢查、開 PR；審查後若需**改 code** 回到 **`/dev`**。 |
-| **`/commit`** | **合併或收工後** lessons learned、文件整理（見 `skills/commit/SKILL.md`）。 |
+| **`/dev`** | 開發、測試與開 PR；有必改項或衝突時回到開發。 |
+| **`/review`／`/code-review`** | 產出審查證據、阻擋項及 GitHub 審查結論。 |
+| **`/pr-followup`** | **選用**：等待審查／CI、辨識證據版本並整理下一步。 |
+| **`/merge`** | 審查與檢查就緒時，可直接使用；統一核對最新 SHA、專案目標分支、授權與合併狀態。 |
+| **`/commit`** | 合併或階段收工後的 lessons learned 與文件整理。 |
 
-**建議流水線**：`/dev` … → Step 5b **`/code-review`** 或遠端 **`/review`** → 結論上 PR → **`/pr-followup <N>`**（必要時 **`--watch`** 等 agent 留言出現）→ 若需修法再 **`/dev`**；合併與日結後 **`/commit`**。
+沒有 PR 的本地工作不需要本 skill。已有最新有效審查與檢查、且已有合併授權時，直接交 `/merge`，**不必先跑 `/pr-followup`**。有未解阻擋項時回 `/dev`；等待或協調才選用本 skill。
 
----
+## Phase 0 — 解析目標、模式與既有授權
 
-## Phase 0 — 解析參數與目標 repo
+### 0.1 `OWNER/REPO`、PR 編號 `N` 與工作目錄 `ROOT`
 
-### 0.1 `OWNER/REPO`
+優先採用使用者指定的 repo／PR URL；否則由目前 clone 的 PR 與 remote 核對。分開記錄 host 與 `OWNER/REPO`；`gh pr` 使用 `--repo HOST/OWNER/REPO`，`gh api` 使用 `--hostname HOST` 且 API 路徑只放 `OWNER/REPO`。若僅有分支名，可用 `gh pr list --repo HOST/OWNER/REPO --head '<branch>' --state open --json number` 找單一 PR；零筆或多筆才請使用者釐清。
 
-與 **`skills/review/SKILL.md` Phase 0.1** 相同優先序：使用者訊息中的 `owner/repo`、PR URL、`gh pr view` 於 git 根目錄、`git remote` 解析（`origin` 與 **`github`** 等皆嘗試，以能還原 `owner/repo` 者為準）。
+`ROOT` 由 `git rev-parse --show-toplevel` 取得（可執行時），用於讀取 `CLAUDE.md`、`AGENTS.md` 及本機審查 artifact。不同 repo 的同號 PR 不得共用狀態或授權。
 
-### 0.2 PR 編號 `N`
-
-- 訊息含 **`https://github.com/o/r/pull/N`**、`#N`（且語境為 PR）、**`pr N`**、**`/pr-followup N`** → 取 `N`。  
-- 若僅有分支名：  
-  `gh pr list --repo OWNER/REPO --head '<branch>' --state open --json number` 取單一 PR；0 或多筆則請使用者指定。
-
-### 0.3 工作目錄 `ROOT`
-
-`git rev-parse --show-toplevel`（可執行時）。用於讀 **`ROOT/CLAUDE.md`**、本機 **`ROOT/.claude/PRPs/reviews/pr-<N>-review.md`**。
-
-### 0.4 模式旗標（由使用者訊息解析）
+### 0.2 模式旗標
 
 | 旗標 | 意義 |
 |------|------|
-| **`--watch`** | **輪詢** PR 對話串／checks，直到偵測到「審查已落地」或逾時（見 Phase 2）。可選 **`--watch-interval 60`**（秒）、**`--watch-max 30`**（輪數）；未寫則預設 **60s × 30 次**。 |
-| **`--dry-run`** | 只產出報告與建議指令，**不**執行 `gh pr merge`、不刪分支。 |
-| **`--merge`** | 使用者**明示**可合併時，才在 Phase 5 呼叫 `gh pr merge`；未出現則只列建議。 |
-| **`--since <ISO8601>`** | 僅把該時間**之後**的留言／review 視為「新一輪審查」（選用）。 |
+| **`--watch`** | 輪詢審查與 checks；預設間隔 60 秒、最多 30 輪，可用 `--watch-interval`／`--watch-max` 調整。 |
+| **`--dry-run`** | 只讀取與回報，不交接執行合併、不改 PR、不清理分支。 |
+| **`--merge`** | 使用者對本次目標的合併授權；就緒後交 `/merge`，仍須通過其全部門檻。 |
+| **`--since <ISO8601>`** | 僅將指定時間後的留言／review 視為新一輪審查訊號，不代替 SHA 核對。 |
 
-開始執行前用 2～4 行簡報：`OWNER/REPO`、`N`、`ROOT`、`--watch`／`--merge`／`--dry-run`。
+### 0.3 既有授權
 
----
+- 沿用本次對話中已明確給出的合併授權，記錄其 **host、repo、PR／批次清單、目標分支、條件及是否限定 SHA**。`--merge` 不是唯一授權方式，沒有此旗標不代表先前授權失效；跨 host 不沿用同號 PR 的授權。
+- 同一 repo、PR、目標分支及已約定工作範圍內，不因從 `/dev` 交接至本 skill 或 `/merge` 而重問。一般修正提交需要重新驗證證據，但不必然撤銷任務級授權。
+- **`--dry-run`、使用者明確「不要合併」、撤回授權或更窄的新指示優先**。授權限定的 SHA 已變，或 repo、PR、目標分支／範圍超出授權時，停止合併交接並釐清。
+- `--watch`、Gate OK、CI 綠及「幫我開發」本身都不構成合併授權。未授權時回報就緒程度與待決事項，不執行合併。
 
-## Phase 1 — 讀取 PR 與 CI 現況
+開始時簡述目標、模式及已取得的授權範圍；資訊已明確時不再請使用者重述。
+
+## Phase 1 — 讀取目前 PR 版本與目標分支
 
 ```bash
-gh pr view N --repo OWNER/REPO --json number,title,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName,author,updatedAt
-gh pr checks N --repo OWNER/REPO
+gh pr view N --repo HOST/OWNER/REPO --json number,title,state,isDraft,mergeable,mergeStateStatus,baseRefName,baseRefOid,headRefName,headRefOid,reviewDecision,url
+gh pr checks N --repo HOST/OWNER/REPO
 ```
 
-- **Draft**：合併前提醒需 **Ready for review**；若政策禁止 bot approve，與 **`/review`** 一致僅 **comment** 路徑。  
-- **mergeable / merge conflict**：若不可合併，**停止**合併路徑，建議 **`/dev`** 或人工解衝突後再跑本 skill。
+- 記錄本輪 **`headRefOid`、`baseRefName`、`baseRefOid`**。目標分支依 `skills/merge/SKILL.md` 的專案政策與使用者指定解析，再與 PR 實際 base 比對；不寫死 `main`，不為配合流程自行改 PR base。
+- Draft、衝突、目標不符或狀態未知都不能回報為就緒。`MERGED` 則核對合併結果後直接回報，不再次合併；`CLOSED` 且未合併時停止合併路徑。
+- 等待中 head、base SHA 或目標分支變動時更新本輪版本，先前 Gate／CI 只保留作歷史；受影響證據需重新驗證。
 
----
+## Phase 2 — 偵測審查訊號（可輪詢）
 
-## Phase 2 — 偵測「agent review 已落地」（可輪詢）
+需要等待時讀取 PR 留言、正式 reviews，或本機 `ROOT/.claude/PRPs/reviews/pr-<N>-review.md`。API 結果須涵蓋目前相關審查，不只看一頁或假設 API 已由新到舊排列：
 
-**目的**：使用者希望「一發現 agent review 有反饋就開始」時，以 **`gh` 輪詢** 近似監聽（**非** GitHub Webhook 長連線；Cursor／Claude 無內建訂閱 API）。
+```bash
+gh api --hostname HOST --paginate "repos/OWNER/REPO/issues/N/comments?per_page=100"
+gh api --hostname HOST --paginate "repos/OWNER/REPO/pulls/N/reviews?per_page=100"
+```
 
-在 **`--watch`** 下：每輪執行下列**任一條件**成立即視為「已落地」，進入 Phase 3：
+`Gate`、`Severity`、bot 作者、留言時間與 artifact 的 mtime **只用來觸發 Phase 3 查核**；它們不能證明目前 head 已受審。`--since` 也只是篩選訊號，不會使舊 SHA 的審查變成有效。
 
-1. **Issue 留言**（PR 在 API 上為 issue）：  
-   `gh api "repos/OWNER/REPO/issues/N/comments?per_page=20"`  
-   由新到舊找：**正文含** `Gate`、`pr-<N>-review.md`、`**Decision**`、`Severity`（大小寫不敏感組合亦可）**且**建立時間在 `--since` 之後（若有）。  
-2. **Pull request reviews**：  
-   `gh api "repos/OWNER/REPO/pulls/N/reviews?per_page=20"`  
-   若有新 submitted review 且 body 或關聯留言指向守門報告。  
-3. **本機 artifact**：`ROOT/.claude/PRPs/reviews/pr-<N>-review.md` **存在**且 **mtime 晚於** 工作開始時間或 `--since`（僅在 `ROOT` 可讀時）。
+- **單次模式**：只讀一輪；證據尚未就緒時回報目前缺項，可依需要再呼叫或選 `--watch`。
+- **`--watch`**：每輪重讀 Phase 1。發現可核對的結論後進 Phase 3；達最大輪數／期限仍無結果就回報最後狀態，不無限等待。等待工具每次不超過 60 秒，較長間隔分段等待；持續工作時維持簡短進度訊息，僅在重要狀態變化時通知結果。
+- 本輪追蹤在目前工作中完成，不另外建立排程或自動化。
 
-**作者啟發式**（可選，與 1 併用）：留言作者 `login` 為 `cursoragent`、`github-actions[bot]`、`copilot-pull-request-reviewer` 等常見 bot／agent 帳號時，提高權重；**仍須**內文或連結像「審查報告」再進 Phase 3，避免一般對話誤觸發。
+## Phase 3 — 核對證據版本與阻擋項
 
-**逾時**：達 **`--watch-max`** 仍無訊號 → 回報最後一次 API 摘要，建議人工刷新 PR 或改單次執行（不加 `--watch`）。
+結合遠端 reviews／留言與本機 artifact，依 `skills/merge/SKILL.md` 的證據規則確認：
 
-**非 `--watch`**：只做**一輪** Phase 2；若尚未落地 → 列出目前最後一則留言摘要，建議使用者待 artifact 上線後再執行 **`/pr-followup N`** 或改用 **`--watch`**。
+1. 正式 review 以 **`commit_id` 對應目前 `headRefOid`**，並核對是否仍為有效結論；留言或本機 artifact 須明示同一 repo、PR 與受審 SHA。缺少或無法對應 SHA 時列為「尚未證實」，不能以新 mtime 補足。
+2. 核對審查適用的目標分支及 base／整合背景。base 已變時，由 `/merge` 重新驗證受影響的 review 與整合證據，不直接沿用舊結論。
+3. **不以本機 artifact 優先蓋過遠端較新的阻擋**。若來源矛盾、存在未解 Must fix／其他專案阻擋，先列明待辦；需要改 code、更新分支或解衝突時交 `/dev`。
+4. 證據完整且無阻擋時只標為「可交合併前檢查」，不是已授權或已合併。最新留言內容、PR 狀態欄或單一 Gate 都不單獨決定結果。
 
----
+## Phase 4 — 核對必要檢查
 
-## Phase 3 — 解讀 Gate 與阻擋項
+- 重新查 checks，記錄其涵蓋的 head 與適用 base／整合提交；僅知道「綠燈」而無法核對所屬提交時，證據仍不完整。
+- 依專案政策核對所有必跑檢查及本機驗證。失敗、pending、未知、無法讀取或沒有 checks 都不自動視為通過；專案明定不需 CI 時，須有適用目前提交的替代驗證證據，不能臨時由 agent 豁免。
+- 需等待可回 Phase 2；檢查失敗交 `/dev`。就緒時進 Phase 5，由 `/merge` 在執行前再次確認版本與全部門檻。
 
-1. **優先讀本機**：`ROOT/.claude/PRPs/reviews/pr-<N>-review.md`（若存在）。  
-2. 否則從 PR **最新長留言**或 **`gh pr view N --comments`** 擷取與 **Gate**、**CRITICAL / HIGH / MUST** 相關段落。  
-3. 結論：  
-   - **阻擋合併**（例：Gate **BLOCKED**、開放 MUST 未勾、CI 失敗）→ **不**進 Phase 5 合併；輸出**待辦清單**，建議 **`/dev`**（附 PR 連結與必改項）或人工處理。  
-   - **實質可合併**（Gate **OK** 或等效、無未解 MUST、CI 綠或專案接受之 waiver）→ 進 Phase 4～5。
+## Phase 5 — 選擇交接
 
----
+| 目前情況 | 下一步 |
+|-----------|--------|
+| 未解阻擋、失敗檢查、衝突或需改 code | 回 `/dev`，附 PR、版本與必改項。 |
+| 審查／CI 尚未就緒或版本無法證實 | 回報缺項；需要等待時選用 Phase 2。 |
+| 證據就緒，但未授權或為 dry-run／禁止合併 | 僅回報狀態與待決事項。 |
+| 證據就緒，且既有授權仍涵蓋目前目標與範圍 | 讀取並依 `skills/merge/SKILL.md` 交接同一目標、版本與授權。 |
 
-## Phase 4 — CI 確認（合併前）
+本 skill 不另執行直接合併、刪分支或 stash 流程，也不以交接摘要取代 `/merge` 的最後查核。若合併能力／規則不可用，回報缺少項目，不繞過門檻。髒工作區保留原狀，本機切換與更新的處理依 `/merge` 規則。
 
-- `gh pr checks N --repo OWNER/REPO`；必要時建議使用者本機跑 **`CLAUDE.md`** 所列 **PR 前必跑**（與 **`/dev` Step 5** 對齊）。  
-- 若有 **`gh pr checks --watch`** 且使用者願意等待，可建議在終端執行直至全綠。
+啟用 auto-merge、加入 merge queue 或命令成功退出都不等於已合併；只有查證 PR 為 **`MERGED`** 且取得合併 commit 後，才回報完成或進行已授權的合併後清理。
 
----
+## Phase 6 — 專案追蹤收尾（選用）
 
-## Phase 5 — 合併與分支衛生（需授權且非 `--dry-run`**）
+依 `ROOT/CLAUDE.md`、`AGENTS.md` 或 `docs/context/ai-collaboration-and-tooling.md` 的約定及本次工作範圍，整理後續項與 handoff，沿用已有的 Notion／工單更新授權；不因跟進 PR 擴張到無關紀錄。
 
-僅當 Phase 3 為「可合併」**且**使用者已給 **`--merge`** 或明確文字「**可以合併**／**merge this PR**」等：
+專案既有 `docs/context/implementation-notes.md` 需要階段結論時，依其格式記錄精簡 handoff 與 PR URL。合併、部署驗證、業務／正式驗收各自記錄，不把合併成功當成其餘項目完成。
 
-1. **髒工作區**：與專案慣例一致，建議先 **`git stash push`** 再於本機切換／pull（見各 repo `CLAUDE.md` 或 **`lessons-learned`**）。  
-2. **`gh pr merge N --repo OWNER/REPO`**：策略（`--squash`／`--merge`／`--rebase`）依專案預設；不確定時 **問一句**再執行。  
-3. 合併後：  
-   - `git push OWNER_REPO_REMOTE --delete <headRefName>`（remote 名稱以專案為準，可能是 **`github`**）。  
-   - `git fetch --prune`、`git checkout <baseRefName>`、`git pull` 更新本機 base。
+## Phase 7 — 回報
 
-未授權合併時：只輸出**建議指令**區塊，供使用者複製執行。
-
----
-
-## Phase 6 — 專案特定收尾（可選）
-
-若 **`ROOT/CLAUDE.md`** 或 **`ROOT/docs/context/ai-collaboration-and-tooling.md`** 存在：
-
-- **Notion／工單**：依文件將 **MEDIUM／Optional** 等追蹤項建在看板（例：paper3-temple **§1.5**）；可用 **`/notion-pm-task`**（若專案已安裝該 command）。  
-- **`docs/context/implementation-notes.md`**：只在有**階段共識**時建議**一句話 handoff**＋ Notion／PR URL，**勿**整頁貼進 repo（除非使用者要求）。
-
----
-
-## Phase 7 — 回覆使用者（固定要含）
-
-- **PR 連結**、**Gate／CI 結論**、是否已合併、遠端分支是否已刪。  
-- **下一步**：若還有開放 finding → **`/dev` + PR/issue**；若已合併且當日收工 → **`/commit`**。  
-- **`--watch`** 時附**輪詢次數**與觸發來源（留言／artifact）。
-
----
-
-## 限制與誠實說明
-
-- **非即時 Webhook**：「監聽」僅能透過 **`--watch` + `gh api` 輪詢** 或使用者手動再次呼叫本指令；無法在 Cursor 內註冊 GitHub 事件。  
-- **合併權限**：受 branch protection、review 數量、bot 不可 approve 等限制；失敗時轉**人工**並保留 log。  
-- **多專案**：一律帶 **`--repo OWNER/REPO`** 或在對應 clone 根目錄執行，避免 merge 錯倉。
-
----
+- repo／PR 連結、目前 **head SHA、base 分支及 SHA**。
+- review／Gate／checks 的適用版本、已確認結果與尚缺證據。
+- 既有授權範圍，以及本次是否交接 `/merge`、是否仍在等待／排隊，或已核實 `MERGED` 與合併 commit。
+- 分支清理與本機同步的實際結果／待辦，部署與驗收分開說明。
+- `--watch` 時附輪數與觸發來源；需要修正則交 `/dev`，合併或階段收工後可依需求交 `/commit`。
 
 ## 維護
 
-- **唯一真相來源**：ECC 倉庫 **`skills/pr-followup/SKILL.md`**。  
-- **同步到本機**：`bash scripts/sync-pr-followup-skill.sh`（安裝 **`~/.claude/skills/pr-followup/SKILL.md`** 與 **`~/.cursor/commands/pr-followup.md`**）。
+- 唯一原始維護位置：ECC 的 **`skills/pr-followup/SKILL.md`**。
+- `scripts/sync-pr-followup-skill.sh` 是另行部署技能的入口；修改本檔不代表要執行同步，必須依使用者本次範圍決定。
