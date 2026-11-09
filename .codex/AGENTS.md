@@ -31,6 +31,7 @@ Available skills:
 - backend-patterns — API design, database, caching
 - e2e-testing — Playwright E2E tests
 - eval-harness — Eval-driven development
+- grill-with-docs — Stress-test plans and produce traceable project documents
 - strategic-compact — Context management
 - api-design — REST API design patterns
 - verification-loop — Build, test, lint, typecheck, security

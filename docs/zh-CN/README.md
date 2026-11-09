@@ -209,7 +209,7 @@ npx ecc-install typescript
 /plugin list everything-claude-code@everything-claude-code
 ```
 
-**搞定！** 你现在可以使用 39 个智能体、163 项技能和 78 个命令了。
+**搞定！** 你现在可以使用 39 个智能体、164 项技能和 78 个命令了。
 
 ***
 
@@ -874,7 +874,7 @@ cp -r everything-claude-code/rules/common/* ~/.claude/rules/
 是的。ECC 是跨平台的：
 
 * **Cursor**: 预翻译的配置位于 `.cursor/`。参见 [Cursor IDE 支持](#cursor-ide-支持)。
-* **OpenCode**: `.opencode/` 中的完整插件支持。参见 [OpenCode 支持](#-opencode-支持)。
+* **OpenCode**: `.opencode/` 中的完整插件支持。参见 [OpenCode 支持](#opencode-支持)。
 * **Codex**: 对 macOS 应用和 CLI 的一流支持，带有适配器漂移防护和 SessionStart 回退。参见 PR [#257](https://github.com/affaan-m/everything-claude-code/pull/257)。
 * **Antigravity**: 为工作流、技能和扁平化规则紧密集成的设置，位于 `.agent/`。参见 [Antigravity 指南](../ANTIGRAVITY-GUIDE.md)。
 * **Claude Code**: 原生支持 — 这是主要目标。
@@ -1096,7 +1096,7 @@ opencode
 |---------|-------------|----------|--------|
 | 智能体 | PASS: 39 个 | PASS: 12 个 | **Claude Code 领先** |
 | 命令 | PASS: 78 个 | PASS: 31 个 | **Claude Code 领先** |
-| 技能 | PASS: 163 项 | PASS: 37 项 | **Claude Code 领先** |
+| 技能 | PASS: 164 项 | PASS: 37 项 | **Claude Code 领先** |
 | 钩子 | PASS: 8 种事件类型 | PASS: 11 种事件 | **OpenCode 更多！** |
 | 规则 | PASS: 29 条 | PASS: 13 条指令 | **Claude Code 领先** |
 | MCP 服务器 | PASS: 14 个 | PASS: 完整 | **完全对等** |
@@ -1208,7 +1208,7 @@ ECC 是**第一个最大化利用每个主要 AI 编码工具的插件**。以�
 |---------|------------|------------|-----------|----------|
 | **智能体** | 39 | 共享 (AGENTS.md) | 共享 (AGENTS.md) | 12 |
 | **命令** | 78 | 共享 | 基于指令 | 31 |
-| **技能** | 163 | 共享 | 10 (原生格式) | 37 |
+| **技能** | 164 | 共享 | 10 (原生格式) | 37 |
 | **钩子事件** | 8 种类型 | 15 种类型 | 暂无 | 11 种类型 |
 | **钩子脚本** | 20+ 个脚本 | 16 个脚本 (DRY 适配器) | N/A | 插件钩子 |
 | **规则** | 34 (通用 + 语言) | 34 (YAML 前页) | 基于指令 | 13 条指令 |
