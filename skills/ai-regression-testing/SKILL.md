@@ -6,7 +6,7 @@ origin: ECC
 
 # AI Regression Testing
 
-Testing patterns specifically designed for AI-assisted development, where the same model writes code and reviews it — creating systematic blind spots that only automated tests can catch.
+Testing patterns specifically designed for AI-assisted development, where the same model writes code and reviews it — creating systematic blind spots that focused automated tests can expose.
 
 ## When to Activate
 
@@ -24,7 +24,7 @@ When an AI writes code and then reviews its own work, it carries the same assump
 AI writes fix → AI reviews fix → AI says "looks correct" → Bug still exists
 ```
 
-**Real-world example** (observed in production):
+**Illustrative failure sequence:**
 
 ```
 Fix 1: Added notification_settings to API response
@@ -37,21 +37,21 @@ Fix 2: Added it to SELECT query
 
 Fix 3: Changed to SELECT *
   → Fixed production path, forgot sandbox path
-  → AI reviewed and missed it AGAIN (4th occurrence)
+  → A sandbox-only check still does not exercise the production adapter
 
-Fix 4: Test caught it instantly on first run PASS:
+Fix 4: A non-empty fixture and explicit contract assertions expose the missing field
 ```
 
-The pattern: **sandbox/production path inconsistency** is the #1 AI-introduced regression.
+Treat sandbox/production path inconsistency as a regression risk; its frequency depends on the project and observed failures.
 
 ## Sandbox-Mode API Testing
 
-Most projects with AI-friendly architecture have a sandbox/mock mode. This is the key to fast, DB-free API testing.
+If the project has a sandbox/mock mode, use it for fast, DB-free tests. These tests supplement the project's TDD, integration, E2E, and coverage requirements; they do not replace them.
 
 ### Setup (Vitest + Next.js App Router)
 
 ```typescript
-// vitest.config.ts
+// vitest.sandbox.config.ts — sandbox tests only
 import { defineConfig } from "vitest/config";
 import path from "path";
 
@@ -59,8 +59,8 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["__tests__/**/*.test.ts"],
-    setupFiles: ["__tests__/setup.ts"],
+    include: ["__tests__/sandbox/**/*.test.ts"],
+    setupFiles: ["__tests__/setup.sandbox.ts"],
   },
   resolve: {
     alias: {
@@ -71,7 +71,7 @@ export default defineConfig({
 ```
 
 ```typescript
-// __tests__/setup.ts
+// __tests__/setup.sandbox.ts
 // Force sandbox mode — no database needed
 process.env.SANDBOX_MODE = "true";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "";
@@ -122,13 +122,13 @@ export async function parseResponse(response: Response) {
 
 ### Writing Regression Tests
 
-The key principle: **write tests for bugs that were found, not for code that works**.
+Prioritize observed failures in the regression layer. New features and other changes still follow the project's test-first workflow and required coverage. For required-field and parity regression cases, seed deterministic, non-empty fixtures and assert the response status before checking its content. Test legitimate empty-query results separately with an expected zero count.
 
 ```typescript
-// __tests__/api/user/profile.test.ts
+// __tests__/sandbox/api/user/profile.test.ts
 import { describe, it, expect } from "vitest";
-import { createTestRequest, parseResponse } from "../../helpers";
-import { GET, PATCH } from "@/app/api/user/profile/route";
+import { createTestRequest, parseResponse } from "../../../helpers";
+import { GET } from "@/app/api/user/profile/route";
 
 // Define the contract — what fields MUST be in the response
 const REQUIRED_FIELDS = [
@@ -154,12 +154,13 @@ describe("GET /api/user/profile", () => {
     }
   });
 
-  // Regression test — this exact bug was introduced by AI 4 times
+  // Regression test for a required field
   it("notification_settings is not undefined (BUG-R1 regression)", async () => {
     const req = createTestRequest("/api/user/profile");
     const res = await GET(req);
-    const { json } = await parseResponse(res);
+    const { status, json } = await parseResponse(res);
 
+    expect(status).toBe(200);
     expect("notification_settings" in json.data).toBe(true);
     const ns = json.data.notification_settings;
     expect(ns === null || typeof ns === "object").toBe(true);
@@ -167,30 +168,63 @@ describe("GET /api/user/profile", () => {
 });
 ```
 
-### Testing Sandbox/Production Parity
+### Testing Sandbox and Production-Adapter Contracts
 
-The most common AI regression: fixing production path but forgetting sandbox path (or vice versa).
+Run the same contract separately against the real sandbox handler and the real production adapter/serializer, with their external dependencies replaced by local fixtures. Do not call a production service or database. Use a separate test project/setup for the production adapter so the global sandbox setup above cannot route both cases through the sandbox branch. If the application cannot inject its data source, isolate that boundary before claiming parity.
+
+The following shared assertion is runnable JavaScript. Expected rows belong to the test fixture, not to the handler response. For this seeded case, an empty response, wrong status, duplicate/missing row, or missing field must fail. This does not prohibit legitimate empty results in a separate empty-query test:
+
+```javascript
+// __tests__/contracts/messages.mjs
+import assert from "node:assert/strict";
+
+export async function assertMessagesContract(handler, expectedRows) {
+  assert.ok(Array.isArray(expectedRows) && expectedRows.length > 0,
+    "Seed a non-empty expected fixture");
+  const response = await handler(new Request("http://localhost/api/user/messages"));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.ok(Array.isArray(body.data));
+  assert.equal(body.data.length, expectedRows.length);
+  for (const row of body.data) {
+    assert.equal(typeof row.id, "string");
+    assert.ok(Object.hasOwn(row, "partner_name"));
+    assert.equal(typeof row.partner_name, "string");
+    assert.ok(row.partner_name.length > 0);
+  }
+  assert.deepEqual(
+    body.data.map(({ id, partner_name }) => ({ id, partner_name })),
+    expectedRows.map(({ id, partner_name }) => ({ id, partner_name })),
+  );
+}
+```
+
+Adapt these factory/fixture imports to the application's actual interfaces; they are illustrative project boundaries, not Next.js or Vitest APIs:
 
 ```typescript
-// Test that sandbox responses match the expected contract
-describe("GET /api/user/messages (conversation list)", () => {
-  it("includes partner_name in sandbox mode", async () => {
-    const req = createTestRequest("/api/user/messages", {
-      sandboxUserId: "user-001",
-    });
-    const res = await GET(req);
-    const { json } = await parseResponse(res);
+import { it } from "vitest";
+import { assertMessagesContract } from "../contracts/messages.mjs";
+import { createSandboxGET } from "@/app/api/user/messages/sandbox";
+import { createProductionGET } from "@/app/api/user/messages/production";
+import { createLocalMessagesDb } from "../fixtures/local-messages-db";
 
-    // This caught a bug where partner_name was added
-    // to production path but not sandbox path
-    if (json.data.length > 0) {
-      for (const conv of json.data) {
-        expect("partner_name" in conv).toBe(true);
-      }
-    }
-  });
+const expectedRows = [{ id: "message-001", partner_name: "Example partner" }];
+
+it("sandbox handler satisfies the non-empty contract", async () => {
+  const handler = createSandboxGET({ messages: structuredClone(expectedRows) });
+  await assertMessagesContract(handler, expectedRows);
+});
+
+it("production adapter satisfies the contract with a local data source", async () => {
+  const db = createLocalMessagesDb({ rows: [
+    { message_id: "message-001", display_name: "Example partner" },
+  ] }); // Raw local rows; the production adapter maps them to the API contract.
+  const handler = createProductionGET({ db });
+  await assertMessagesContract(handler, expectedRows);
 });
 ```
+
+The production fixture must honor the adapter's requested SELECT columns and return query errors when injected. Do not feed the same prebuilt response fake into both cases. Verify that omitting a required column breaks the production-adapter test, and that a query error produces the project's error response rather than an empty successful list. A local fixture checks the exercised mapping and contract; real database permissions, joins, and deployment behavior need separate integration evidence.
 
 ## Integrating Tests into Bug-Check Workflow
 
@@ -246,7 +280,7 @@ User: "バグチェックして" (or "/bug-check")
 
 ### Pattern 1: Sandbox/Production Path Mismatch
 
-**Frequency**: Most common (observed in 3 out of 4 regressions)
+**Risk**: Multiple branches can drift when only one path is changed.
 
 ```typescript
 // FAIL: AI adds field to production path only
@@ -263,19 +297,7 @@ if (isSandboxMode()) {
 return { data: { id, email, name, notification_settings } };
 ```
 
-**Test to catch it**:
-
-```typescript
-it("sandbox and production return same fields", async () => {
-  // In test env, sandbox mode is forced ON
-  const res = await GET(createTestRequest("/api/user/profile"));
-  const { json } = await parseResponse(res);
-
-  for (const field of REQUIRED_FIELDS) {
-    expect(json.data).toHaveProperty(field);
-  }
-});
-```
+**Test to catch it**: Run the non-empty shared contract above separately against the sandbox handler and production adapter. A sandbox-only test cannot establish the production response contract.
 
 ### Pattern 2: SELECT Clause Omission
 
@@ -291,11 +313,19 @@ const { data } = await supabase
 return { data: { ...data, notification_settings: data.notification_settings } };
 // → notification_settings is always undefined
 
-// PASS: Use SELECT * or explicitly include new columns
-const { data } = await supabase
+// PASS: Select the contract's required fields inside an authenticated handler.
+// userId must already be resolved and authorized by the application.
+const { data, error } = await supabase
   .from("users")
-  .select("*")
+  .select("id, email, name, notification_settings")
+  .eq("id", userId)
   .single();
+
+if (error || !data) {
+  // Use the project's error/status mapping; never expose the database error.
+  return Response.json({ error: { code: "profile_query_failed" } }, { status: 500 });
+}
+return Response.json({ data }, { status: 200 });
 ```
 
 ### Pattern 3: Error State Leakage
@@ -340,29 +370,17 @@ const handleRemove = async (id: string) => {
 };
 ```
 
-## Strategy: Test Where Bugs Were Found
+## Strategy: Prioritize the Regression Layer
 
-Don't aim for 100% coverage. Instead:
+Add a reproducer before fixing an observed bug, then rerun that same target after the fix. Prioritize API branches, authentication boundaries, and state transitions where failures have occurred. Continue to write test-first coverage for new features and required critical flows even if no bug has been recorded there.
 
-```
-Bug found in /api/user/profile     → Write test for profile API
-Bug found in /api/user/messages    → Write test for messages API
-Bug found in /api/user/favorites   → Write test for favorites API
-No bug in /api/user/notifications  → Don't write test (yet)
-```
-
-**Why this works with AI development:**
-
-1. AI tends to make the **same category of mistake** repeatedly
-2. Bugs cluster in complex areas (auth, multi-path logic, state management)
-3. Once tested, that exact regression **cannot happen again**
-4. Test count grows organically with bug fixes — no wasted effort
+A regression test protects the inputs, paths, and assertions it exercises; it does not prove that a bug can never recur or that untested paths are correct. Record fixture and integration limits alongside the result.
 
 ## Quick Reference
 
 | AI Regression Pattern | Test Strategy | Priority |
 |---|---|---|
-| Sandbox/production mismatch | Assert same response shape in sandbox mode |  High |
+| Sandbox/production mismatch | Run a non-empty contract against both independently exercised paths |  High |
 | SELECT clause omission | Assert all required fields in response |  High |
 | Error state leakage | Assert state cleanup on error |  Medium |
 | Missing rollback | Assert state restored on API failure |  Medium |
@@ -371,15 +389,15 @@ No bug in /api/user/notifications  → Don't write test (yet)
 ## DO / DON'T
 
 **DO:**
-- Write tests immediately after finding a bug (before fixing it if possible)
+- Write the regression reproducer before the fix, following the project's RED/GREEN requirements
 - Test the API response shape, not the implementation
 - Run tests as the first step of every bug-check
 - Keep tests fast (< 1 second total with sandbox mode)
 - Name tests after the bug they prevent (e.g., "BUG-R1 regression")
 
 **DON'T:**
-- Write tests for code that has never had a bug
+- Treat regression prioritization as permission to skip new-feature TDD or required critical-flow tests
 - Trust AI self-review as a substitute for automated tests
 - Skip sandbox path testing because "it's just mock data"
 - Write integration tests when unit tests suffice
-- Aim for coverage percentage — aim for regression prevention
+- Treat a coverage percentage alone as regression prevention or use this skill to lower the project's coverage requirements

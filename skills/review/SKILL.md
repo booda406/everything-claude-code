@@ -49,7 +49,7 @@ disable-model-invocation: true
 
 若使用者訊息含 `#8`、`issue 8`、`--issue 8` 等，設為該編號。
 
-否則可讀取 `ROOT/CLAUDE.md`（或 `ROOT/.claude/REVIEW.md` 若存在）前約 200 行，尋找**任一**慣例標記（整行或註解內皆可）：
+否則依專案既有入口讀取 `ROOT/AGENTS.md`、`ROOT/CLAUDE.md`（及其指向的規範，或 `ROOT/.claude/REVIEW.md` 若存在），尋找**任一**慣例標記（整行或註解內皆可）：
 
 - `review-coordination-issue: 8`
 - `REVIEW_COORDINATION_ISSUE=8`
@@ -93,29 +93,35 @@ disable-model-invocation: true
 
 - **超大 PR**：若 `changedFiles` ≥ 50（或 diff 顯然過大），在報告開頭**警告範圍**，優先審：**業務核心、auth、部署、schema、金流、API 契約**與其測試；其餘檔案可列為「掃描受限／建議分批」（與 `/code-review` 大 PR 策略一致：先源碼與測試，再設定／文件）。
 - **分支落後／分歧**：若 head 與 base 明顯長期未同步，在「測試與回滾風險」中提醒先 `git fetch` 並 `rebase`／merge base；必要時建議在留言附具體指令。
-- **Draft PR**：僅允許 **`gh pr review` 的 `--comment`**，不可 approve / request-changes（與 GitHub 慣例一致）。
+- **Draft PR**：僅允許 **`COMMENT` review 事件**，不可 approve / request-changes（與 GitHub 慣例一致）。
 - **僅文件／設定類 PR（docs-light）**：若變更幾乎全為 `docs/`、`*.md`、`.github/` 工作流程／issue 模板、純註解等，**縮小**程式碼深度審查範圍，仍以**正確性**（誤導、過時步驟）、**範例是否洩漏祕密**、**連結是否有效**為主；VALIDATE 可跳過 build 或僅跑不影響之檢查，但須在 artifact 與留言開頭註明 **「docs-light 模式」**。
 
-取得：
+取得並保存同一份 PR snapshot：
 ```bash
-gh pr view N --repo OWNER/REPO --json number,title,body,author,isDraft,baseRefName,headRefName,headRefOid,changedFiles,additions,deletions
-gh pr diff N --repo OWNER/REPO
+gh pr view N --repo OWNER/REPO --json number,title,body,author,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,changedFiles,additions,deletions
 ```
+
+將該回應的 `headRefOid`、`baseRefOid` 固定為 `REVIEW_HEAD_SHA`、`REVIEW_BASE_SHA`，並記錄取得時間；本輪 diff、整檔、行號、驗證與 review payload 均綁這組 SHA。分支名稱只供顯示，不用來取本輪內容。後續 PR 更新須另開版本，不把新 SHA 套在舊 findings 上。
 
 ### 2.2 專案脈絡
 
-讀取 `ROOT/CLAUDE.md`、`ROOT/README.md`（若有）、`ROOT/.claude/docs/`（若有）、`ROOT/.claude/PRPs/plans/` 與 `reports/`（若存在）中與此 PR 相關的片段；解析 PR 描述中的目標、連結 issue、測試聲明。  
+依專案既有入口讀取 `ROOT/AGENTS.md`、`ROOT/CLAUDE.md` 與其指向的規範、`ROOT/README.md`（若有）、`ROOT/.claude/docs/`（若有）、`ROOT/.claude/PRPs/plans/` 與 `reports/`（若存在）中與此 PR 相關的片段；解析 PR 描述中的目標、連結 issue、測試聲明。\
 另掃**貢獻／規範**（若存在）：`CONTRIBUTING.md`、`docs/contributing.md`、`.github/pull_request_template.md`、`.github/PULL_REQUEST_TEMPLATE/*`，將合併／測試／commit 規範納入「Pattern compliance」與驗證決策。
 
 ### 2.3 讀檔策略（勿只看 diff hunk）
 
-對變更所涉檔案，**必須**在 `head` 上取得足夠上下文，避免誤判：
+對變更所涉檔案，**必須**取得本輪 `REVIEW_HEAD_SHA` 的足夠上下文，避免誤判：
 
-- **優先**：對每個變更檔，用 `gh api` 取 `repos/OWNER/REPO/contents/<path>?ref=<headRefName>` 解 base64 **讀整檔**（大檔可讀關鍵區段，但需在報告註明「僅讀區段」）。
-- **批量取檔（與 `/code-review` 相同思路）**：可對變更路徑迭代，例如  
-  `gh pr diff N --repo OWNER/REPO --name-only | while IFS= read -r f; do [ -n "$f" ] && gh api "repos/OWNER/REPO/contents/$f?ref=<headRefName>" --jq .content | base64 -d; done`  
-  （路徑需 URL 編碼時改用適當轉義；rename 複雜時仍以單檔 API 為準。）
-- 若 `gh` 或 API 失敗：改從本機 `ROOT` checkout `head` 後讀檔；仍失敗則於報告標 **「僅能依 diff 推斷」** 並降低結論確定性。
+- **優先重用本機 objects，只讀取不切分支**。確認 remote 對應目標 repo，且兩個 SHA 的 objects 可用後，計算 merge-base 並保存為 `REVIEW_MERGE_BASE_SHA`。以下每步若失敗須保留 exit code／stderr，停止依賴該結果的步驟：
+  ```bash
+  REVIEW_MERGE_BASE_SHA="$(git -C "$ROOT" merge-base "$REVIEW_BASE_SHA" "$REVIEW_HEAD_SHA")" || exit "$?"
+  git -C "$ROOT" diff --name-status -z "$REVIEW_MERGE_BASE_SHA" "$REVIEW_HEAD_SHA" || exit "$?"
+  git -C "$ROOT" diff "$REVIEW_MERGE_BASE_SHA" "$REVIEW_HEAD_SHA" || exit "$?"
+  git -C "$ROOT" show "$REVIEW_HEAD_SHA:$path" || exit "$?"
+  ```
+  路徑清單用 NUL 分隔解析，保留空白、換行與 Unicode 檔名；不要用逐行拆路徑。變更檔讀整檔；刪除檔讀 merge-base 舊內容，rename 同時保留舊／新路徑。大檔僅讀關鍵區段時，報告須註明「僅讀區段」。
+- **缺本機 objects 時**：可從已核對 remote fetch 指定 SHA 至 object store，不 checkout、stash 或改 index；或用 GitHub API 的固定 SHA compare／contents。取檔 `repos/OWNER/REPO/contents/<URL-encoded-path>?ref=<REVIEW_HEAD_SHA>`，刪除檔用固定 merge-base SHA。記錄 compare 的截斷／分頁與整檔取得限制，不以可移動的 `headRefName` 或另一時點的 `gh pr diff` 混充同一 snapshot。
+- 任何備案仍須對應相同 SHA 且保留原失敗原因；無法取得時標 **「僅能依 diff 推斷」** 或未涵蓋檔案，降低結論確定性，不為取檔切換髒 checkout。
 
 ### 2.4 七面向補充鏡頭（簡要掃描）
 
@@ -157,26 +163,25 @@ gh pr diff N --repo OWNER/REPO
 
 ### 2.5 VALIDATE（本機驗證，節流）
 
-在 `ROOT` 且遠端為同一 `OWNER/REPO` 時，**盡可能** checkout PR head（例如 `gh pr checkout N --repo OWNER/REPO` 或 fetch + detach），再依專案類型執行驗證。**不要**對每個 open PR 無條件跑全套（成本高）。
+先確認驗證目錄的 remote、HEAD 與內容確實對應本輪 `REVIEW_HEAD_SHA`。優先重用合適且乾淨的本機 checkout；否則可將固定 SHA 匯出至本次自有暫存目錄驗證，註明 submodule／LFS／未具備依賴等限制。不切換髒 checkout、不動其他 worktree、不把混有未提交修改的測試算成該 SHA 的證據。無法建立對應環境就標 Skipped，保留既有工作。**不要**對每個 open PR 無條件跑全套（成本高）。
 
 **完整驗證**（typecheck／lint／test／build 中能適用的全跑）當且僅當至少滿足一項：
 
 - 使用者訊息**點名**該 PR 號；或
 - 本輪判定該 PR **有新 push**；或
-- 變更觸及高風險路徑（關鍵字示意：`auth`、`security`、`deploy`、`migration`、`schema`、`payment`、`lambda`、`secrets` 等，並結合 `CLAUDE.md` 專案自定義）；或
+- 變更觸及高風險路徑（關鍵字示意：`auth`、`security`、`deploy`、`migration`、`schema`、`payment`、`lambda`、`secrets` 等，並結合 `AGENTS.md`／`CLAUDE.md` 等專案自定義）；或
 - 當前 **open PR 數量 ≤ 3**。
 
 **輕量驗證**（其餘情況）：至少執行**測試**為主（例如 Python `pytest`、Node `npm test`），能跑則跑；其餘 typecheck／lint／build 標為 Skipped 並說明原因。
 
 依偵測到的專案類型選命令（與 `/code-review` 對齊）：
 
-- **Node**（`package.json`）：與 `/code-review` 相同，**可選指令**用 `2>/dev/null` 與 `||` 串接，避免缺 script 時中斷，例如：  
-  `npm run typecheck 2>/dev/null || npx tsc --noEmit 2>/dev/null`；`npm run lint`、`npm test`、`npm run build`（存在才跑）
+- **Node**（`package.json`）：先讀實際 scripts、鎖檔與 CI，使用專案指定的 package manager。script 存在才執行；不存在時，才可另選專案慣用且已安裝的工具（例如本機 `node_modules/.bin/tsc --noEmit`），或標 Skipped 並說明。script 已執行而非零退出就是 Fail，保留原 stdout／stderr 與 exit code，不接 `||` fallback、不用 `2>/dev/null` 隱藏失敗，也不用 `npx` 臨時安裝套件來補驗證。
 - **Rust**（`Cargo.toml`）：`cargo clippy -- -D warnings`、`cargo test`、`cargo build`
 - **Go**（`go.mod`）：`go vet ./...`、`go test ./...`、`go build ./...`
 - **Python**（`pyproject.toml` / `setup.py`）：`pytest`（或專案慣用指令）
 
-若無法 checkout 或環境缺失：在報告 **Validation Results** 區塊逐列 **Skipped** 並附簡短理由（例如無本機 clone、與 `OWNER/REPO` 不一致）。
+若無對應 SHA 的驗證目錄或環境缺失：在報告 **Validation Results** 區塊逐列 **Skipped** 並附簡短理由（例如無本機 clone、與 `OWNER/REPO` 不一致）。
 
 ### 2.6 書面產物（artifact）
 
@@ -186,7 +191,7 @@ gh pr diff N --repo OWNER/REPO
 
 內容至少包含：
 
-- 標題、審查日期、`OWNER/REPO`、PR 標題、author、head → base
+- 標題、審查日期、`OWNER/REPO`、PR 標題、author、head → base；保存完整 `REVIEW_HEAD_SHA`、`REVIEW_BASE_SHA`、`REVIEW_MERGE_BASE_SHA`、snapshot 時間與驗證目錄／版本，列出未涵蓋範圍
 - **GitHub 決策**（對齊 `/code-review` artifact）：`Decision: APPROVE | REQUEST CHANGES | COMMENT`（或 BLOCK 語意由 REQUEST CHANGES 表達），與守門 **Gate: BLOCK | RISKY | OK** 並列，方便與 PRP／他人對照
 - **## 嚴重度與合併要求**：附上 **2a** 的 **Severity → Action** 對照表（原文或精簡版均可），使未讀完整對話者也能對齊語意
 - **Must fix / Should fix 計數摘要**（1～3 行）：從問題清單彙總，與 Gate 理由呼應
@@ -204,15 +209,19 @@ gh pr diff N --repo OWNER/REPO
   …
   ```
   （每則內含 **Action** 與 **Suggested fix**。）
-- **Validation Results** 表：Type check／Lint／Tests／Build → Pass / Fail / Skipped
+- **Validation Results** 表：Type check／Lint／Tests／Build → Pass / Fail / Skipped；附實際命令與 exit code，區分缺 script 與真正失敗。原始 stdout／stderr 僅留本機；可發表 artifact 只含必要且已去敏感的片段，不貼原始 log，也不暴露本機 log 絕對路徑
 - 變更檔案列表（Added/Modified/Deleted 若可取得），並以表格或清單**分類**：**Source**／**Tests**／**Config**／**Docs**／**Other**（依路徑與副檔名推斷即可）
 - **Summary**（1～2 句話總評，對齊 `/code-review` artifact 可讀性）
 - 若僅 diff、未跑驗證、或超大 PR 限縮範圍，**必須**在文內註明限制
 
-### 2.7 發佈到 GitHub（`gh` 可用時）
+### 2.7 發佈到 GitHub（`gh` 可用且本次授權涵蓋發佈時）
+
+沿用本次已有授權；明示 local-only／僅草案／不外部寫入時，只保留 artifact 與 payload，不執行本節寫入。每次發佈（包括 conversation、行內或 review）前重新讀 PR 的 head／base SHA 與 draft 狀態，對照 snapshot；任一 SHA 改變須先審新版本差異並更新必要驗證與 artifact，再發佈。取得狀態失敗不得猜測未變。發佈後讀回 review 的 `commit_id`／狀態及目前 head；若期間又變更，明列結果僅適用舊 SHA，不宣稱最新 Gate 已就緒。
+
+**發佈前內容核對**：逐項檢查 artifact、review body 與行內內容是否含 secrets、PII、客戶資訊、私有 infra 或不必要的絕對路徑；僅保留必要且已去敏感的證據與 exit code。無法確定可安全發表時，保留本機並列為待安全交付，不貼原始 log。以下「全文」指已完成此核對的可發表 artifact。
 
 **必做：完整 artifact 上 PR（conversation）**  
-在依下表送出 **`gh pr review`**（Pull request review 事件）**之前或之後**，必須將 **2.6** 產物 **`ROOT/.claude/PRPs/reviews/pr-<N>-review.md` 全文** 貼成 **一般 PR 留言**（issue comment／conversation），讓只在 GitHub 網頁作業的人與其他 agent 能讀到完整 Findings、Validation、Gate、Severity→Action：
+在依下表送出 **固定 SHA 的 review API**（Pull request review 事件）**之前或之後**，必須將 **2.6** 產物 **`ROOT/.claude/PRPs/reviews/pr-<N>-review.md` 全文** 貼成 **一般 PR 留言**（issue comment／conversation），讓只在 GitHub 網頁作業的人與其他 agent 能讀到完整 Findings、Validation、Gate、Severity→Action：
 
 ```bash
 gh pr comment <N> --repo OWNER/REPO --body-file ROOT/.claude/PRPs/reviews/pr-<N>-review.md
@@ -220,32 +229,56 @@ gh pr comment <N> --repo OWNER/REPO --body-file ROOT/.claude/PRPs/reviews/pr-<N>
 
 （實務上 `ROOT` 為該次審查的 git 根目錄；`--repo` 與 PR 號依 Phase 0 解析。）
 
-- **不得**僅將完整報告留在本機檔案而不貼上 PR；亦**不得**只依 `gh pr review --body` 的短文代替全文（`gh pr review` 的 body 可短寫決策並註明「完整報告見上一則 `gh pr comment`」）。
+- **不得**僅將完整報告留在本機檔案而不貼上 PR；亦**不得**只依 review body 的短文代替全文（review 的 body 可短寫決策並註明「完整報告見上一則 `gh pr comment`」）。
 - 若超過 GitHub 單則留言上限（約 **65,536** 字元）：改以**多則** `gh pr comment` 分段貼上。
-- 若目標 repo 之 `CLAUDE.md`／團隊規範對發佈有更嚴格定義，以**專案規範**為準。
+- 若目標 repo 之 `AGENTS.md`／`CLAUDE.md`／團隊規範對發佈有更嚴格定義，以**專案規範**為準。
 
 **然後**將 **BLOCK/RISKY/OK** 與 **CRITICAL/HIGH** 狀況對應到 GitHub Review 事件（draft 僅 comment）：
 
-| 情境 | 建議 `gh pr review` |
+| 情境 | 建議 review `event` |
 |------|---------------------|
-| Draft PR | `--comment` |
-| 建議 **BLOCK** 或存在 **CRITICAL**，或 **HIGH** 且驗證失敗 | `--request-changes`（body 附摘要與首要待辦） |
-| **RISKY** 或多個 **MEDIUM** | 預設 `--comment`；若團隊偏好強制修改可用 `--request-changes` 並說明理由 |
-| **OK** 且完整驗證皆 Pass、無 CRITICAL/HIGH | `--approve`（若政策不允許 bot approve，改 `--comment` 並聲明「實質 OK」） |
-| **OK** 但仍有 **MEDIUM/LOW** 建議、驗證 Pass | 可 **`--approve` 並在 body 附帶評論**（對齊 `/code-review`「APPROVE with comments」） |
-| 驗證大面積 Skipped 但程式碼面 OK | `--comment`，勿 approve |
+| Draft PR | `COMMENT` |
+| 建議 **BLOCK** 或存在 **CRITICAL**，或 **HIGH** 且驗證失敗 | `REQUEST_CHANGES`（body 附摘要與首要待辦） |
+| **RISKY** 或多個 **MEDIUM** | 預設 `COMMENT`；若團隊偏好強制修改可用 `REQUEST_CHANGES` 並說明理由 |
+| **OK** 且完整驗證皆 Pass、無 CRITICAL/HIGH | `APPROVE`（若政策不允許 bot approve，改 `COMMENT` 並聲明「實質 OK」） |
+| **OK** 但仍有 **MEDIUM/LOW** 建議、驗證 Pass | 可 **`APPROVE` 並在 body 附帶評論**（對齊 `/code-review`「APPROVE with comments」） |
+| 驗證大面積 Skipped 但程式碼面 OK | `COMMENT`，勿 approve |
 
-**與 Severity→Action 對齊（發佈前自查）**：若尚有多則 **Must fix**／**Should fix** 未在留言中接受或修復，**不得** `--approve`；**Fix recommended** 為主且 Gate 為 **RISKY** 時，優先 `--comment` 或 `--request-changes` 並列出跟進項。
+**與 Severity→Action 對齊（發佈前自查）**：若尚有多則 **Must fix**／**Should fix** 未在留言中接受或修復，**不得** `APPROVE`；**Fix recommended** 為主且 Gate 為 **RISKY** 時，優先 `COMMENT` 或 `REQUEST_CHANGES` 並列出跟進項。
 
-**安全紅線（與 `/code-review` 一致）**：只要存在**未緩解**之 **CRITICAL** 安全／資料遺失風險 findings，**禁止** `--approve`；即使用戶傳入 `--approve` 覆寫，仍應改為 `--request-changes` 或 `--comment` 並在 artifact 註明原因。
+**安全紅線（與 `/code-review` 一致）**：只要存在**未緩解**之 **CRITICAL** 安全／資料遺失風險 findings，**禁止** `APPROVE`；即使用戶傳入 `--approve` 覆寫，仍應改為 `REQUEST_CHANGES` 或 `COMMENT` 並在 artifact 註明原因。
 
-必要時可補 **行內留言**（對齊 `/code-review`）：
+送出事件時用完整 JSON **object**，`commit_id` 必須是已審的 `REVIEW_HEAD_SHA`；單則或多則行內留言同樣綁此 SHA 與已核對的 diff 行號／side，不在送出時改抓最新 head 替換。無行內留言可省略 `comments`：
 
-- 單則：`gh api "repos/OWNER/REPO/pulls/N/comments" -f body="..." -f path="..." -F line=... -f side="RIGHT" -f commit_id="$(gh pr view N --repo OWNER/REPO --json headRefOid -q .headRefOid)"`
-- **多則一次送出**：`gh api "repos/OWNER/REPO/pulls/N/reviews" -f event="COMMENT" -f body="<總結>" --input comments.json`  
-  其中 `comments.json` 為 `[{"path":"file","line":L,"body":"..."}, ...]`（與官方範例一致）。
+```json
+{
+  "commit_id": "<REVIEW_HEAD_SHA>",
+  "event": "COMMENT",
+  "body": "<總結；完整報告見 PR conversation>",
+  "comments": [
+    {"path": "src/file.ts", "line": 12, "side": "RIGHT", "body": "<具體問題與修正建議>"}
+  ]
+}
+```
 
-**使用者覆寫**（與 `/code-review` 相同）：若訊息含明確 **`--approve`** 或 **`--request-changes`**（且非 draft），可在仍完整列出 findings 的前提下，**覆寫**上表對 `gh pr review` 事件的選擇，並在 artifact 註明「依使用者旗標覆寫」。
+payload 放在 repo 外、本次自有且權限受限的暫存檔；先確認 `/tmp` 位於 repo 外，再安全建立（不要在工作樹留下 `review.json`）：
+```bash
+REVIEW_PAYLOAD="$(mktemp "/tmp/pr-review.XXXXXXXX")" || exit "$?"
+trap 'rm -f -- "$REVIEW_PAYLOAD"' EXIT
+```
+
+用結構化 JSON 寫入該 `REVIEW_PAYLOAD`，填妥上例的實際 SHA／事件／已審 path 與行號，解析並完成內容核對後，才在同一 shell 送出：
+```bash
+gh api --method POST "repos/OWNER/REPO/pulls/N/reviews" --input "$REVIEW_PAYLOAD"
+review_exit=$?
+exit "$review_exit"
+```
+
+保留 API 原 exit code／stderr；EXIT trap 只清理本次建立的這個檔案，不掃描刪除其他暫存檔。若需保留失敗 payload 作本機證據，改用本次自有的 repo 外安全留存位置並明列，不留下新 untracked 檔。
+
+`--input` 檔案包含所有 body 欄位；不要再混用 `-f event=...`／`-f body=...`（這些 flags 在 `--input` 下會成為 query parameters），也不要只傳 comments array。API 失敗保留原 exit code／stderr，未讀回成功前不稱已送出或改以另一寫入類型假裝完成。
+
+**使用者覆寫**（與 `/code-review` 相同）：若訊息含明確 **`--approve`** 或 **`--request-changes`**（且非 draft），可在仍完整列出 findings 的前提下，**覆寫**上表對 review 事件的選擇，並在 artifact 註明「依使用者旗標覆寫」。
 
 若無 `gh`：略過本小節，並在 artifact 頂部註記「未發佈至 GitHub」。
 
@@ -367,16 +400,16 @@ Next steps:
 
 ## 監聽重點（依專案補齊）
 
-- 讀 `ROOT/CLAUDE.md`（與 `ROOT/README.md` 若有）中是否註記 **額外 gate**（例如 coverage 門檻、特定 PR 狀態、必跑檢查），納入本次「監聽重點」並在首則回覆列出。
+- 讀專案既有 `ROOT/AGENTS.md`／`ROOT/CLAUDE.md` 與其指向規範（與 `ROOT/README.md` 若有）中是否註記 **額外 gate**（例如 coverage 門檻、特定 PR 狀態、必跑檢查），納入本次「監聽重點」並在首則回覆列出。
 - 追蹤預設分支 CI（`gh run list --repo OWNER/REPO` 等）。
 - **若有 `COORD_ISSUE`**：該 Issue 有新留言時視需要回應。
 
 ## 執行原則
 
-- 工具出錯時主動切換備用方案（例如 `gh api` 失敗 → 改 `gh pr comment`／本機讀檔），**盡量不停下**；無法還原時在 artifact 與聊天中寫明缺口。
+- 工具失敗保留原 exit code／stderr；只讀備案須維持相同 SHA／範圍並註明限制。真正驗證失敗不換命令掩蓋；外部發佈失敗不改留言類型假裝成功，回報未完成項目。
 - **Local-only 模式**（使用者明確要求只審工作區、或訊息含 **`--local`**，且未要求掃描 open PR 時）：  
-  1. `git diff --name-only HEAD`；若無變更則回覆 “Nothing to review.”  
-  2. 對變更檔**讀全檔**，套用 **2.4b 安全速查**、**2.4c 機械性**、**2.4 七面向**（與 `/code-review` Local Mode 對齊）。  
+  1. 盤點 tracked（含 staged／unstaged／刪除）與未追蹤且未 ignore 檔案的聯集：有 HEAD 時取 `git diff --name-only -z HEAD` 及 `git ls-files --others --exclude-standard -z`；以 NUL 解析並去重。尚無 HEAD 時從 index 與工作樹盤點新增檔，勿把 diff 失敗當空集合。只有聯集確實為空才能回覆 “Nothing to review.”
+  2. 保持工作樹與 index 原樣；記錄審查前後狀態／內容變動，途中改變的檔案須重核。對變更檔（含未追蹤檔）**讀全檔**，刪除檔補讀原內容；套用 **2.4b 安全速查**、**2.4c 機械性**、**2.4 七面向**（與 `/code-review` Local Mode 對齊）。
   3. 產出 Markdown 報告（可寫 `ROOT/.claude/PRPs/reviews/local-review-<date>.md` 或直接貼在對話）；每則 finding 須對齊 `/code-review` Local **Phase 3 — REPORT** 欄位：**Severity**、**檔案與行號**、**問題描述**、**建議修正（Suggested fix）**，並含 **2a** 之 **Action**；**CRITICAL/HIGH** 時**明確建議勿 commit**（與 code-review「Block commit if CRITICAL or HIGH」一致）；不強制跑 VALIDATE，但若使用者環境允許仍建議跑測試。  
   4. **不**執行 open PR 掃描、**不**要求 `gh pr review`（除非使用者另要求）。  
   預設仍以 **open PR 守門** 為主；僅在使用者指明本地模式時切換。

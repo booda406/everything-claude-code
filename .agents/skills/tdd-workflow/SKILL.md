@@ -47,6 +47,29 @@ ALWAYS write tests first, then implement code to make tests pass.
 - Browser automation
 - UI interactions
 
+### 4. Git Checkpoints
+- Follow existing user authorization and repository policy for checkpoint commits. Explicit no-commit/no-stage instructions take precedence; do not ask again merely to satisfy this workflow.
+- When checkpoint commits are not authorized, keep task-local evidence of the test target, command, result, timestamp, and relevant changed files/diff. Do not commit, stage, stash, or amend to manufacture a checkpoint; local evidence is not a commit checkpoint.
+- When checkpoint commits are authorized in a Git repository, create them after the validated TDD stages below
+- Do not squash or rewrite these checkpoint commits until the workflow is complete
+- Each checkpoint commit message must describe the stage and the exact evidence captured
+- Count only commits created on the current active branch for the current task
+- Do not treat commits from other branches, earlier unrelated work, or distant branch history as valid checkpoint evidence
+- Before treating a checkpoint as satisfied, verify that the commit is reachable from the current `HEAD` on the active branch and belongs to the current task sequence
+- The preferred compact workflow is:
+  - one commit for failing test added and RED validated
+  - one commit for minimal fix applied and GREEN validated
+  - one optional commit for refactor complete
+- Separate evidence-only commits are not required if the test commit clearly corresponds to RED and the fix commit clearly corresponds to GREEN
+
+## Choose the Project's Test Runner
+
+Before using the commands below, inspect the project's scripts, lockfile, CI configuration, and installed tools. Prefer its existing runner, package manager, and actual test target. The `npm`, Jest, and Playwright commands below are examples, not instructions to replace the project's setup.
+
+Use `node:test` or direct Node execution only when the real target is executable with the existing dependencies. A mock/helper-only exercise or static check is not runtime RED for a different application target. Keep the same actual target for GREEN.
+
+If no suitable runner can execute the target, report RED, GREEN, and coverage as not obtained, with the concrete blocker; do not install temporary packages merely to manufacture evidence. Reuse dependency changes already covered by the task's authorization. Only list a dependency change for confirmation when it exceeds that authorization or its scope is unclear; do not ask again for an already authorized change.
+
 ## TDD Workflow Steps
 
 ### Step 1: Write User Journeys
@@ -87,6 +110,29 @@ npm test
 # Tests should fail - we haven't implemented yet
 ```
 
+This step is mandatory and is the RED gate for all production changes.
+
+Before modifying business logic or other production code, you must verify a valid RED state via one of these paths:
+- Runtime RED:
+  - The relevant test target compiles successfully
+  - The new or changed test is actually executed
+  - The result is RED
+- Compile-time RED:
+  - The new test newly instantiates, references, or exercises the buggy code path
+  - The compile failure is itself the intended RED signal
+- In either case, the failure is caused by the intended business-logic bug, undefined behavior, or missing implementation
+- The failure is not caused only by unrelated syntax errors, broken test setup, missing dependencies, or unrelated regressions
+
+A test that was only written but not compiled and executed does not count as RED.
+
+Do not edit production code until this RED state is confirmed.
+
+When checkpoint commits are authorized, create one immediately after this stage is validated. Otherwise record the valid RED evidence locally and continue within the existing no-commit scope.
+Recommended commit message format:
+- `test: add reproducer for <feature or bug>`
+- This commit may also serve as the RED validation checkpoint if the reproducer was compiled and executed and failed for the intended reason
+- For a committed checkpoint, verify that it is on the current active branch before continuing
+
 ### Step 4: Implement Code
 Write minimal code to make tests pass:
 
@@ -97,11 +143,23 @@ export async function searchMarkets(query: string) {
 }
 ```
 
+For an authorized checkpoint workflow, stage only the minimal task-owned fix and defer its commit until GREEN is validated in Step 5. Under no-commit/no-stage instructions, leave changes unstaged and keep local evidence instead.
+
 ### Step 5: Run Tests Again
 ```bash
 npm test
 # Tests should now pass
 ```
+
+Rerun the same relevant test target after the fix and confirm the previously failing test is now GREEN.
+
+Only after a valid GREEN result may you proceed to refactor.
+
+When checkpoint commits are authorized, create one immediately after GREEN is validated. Otherwise record the command and result for the same test target locally.
+Recommended commit message format:
+- `fix: <feature or bug>`
+- The fix commit may also serve as the GREEN validation checkpoint if the same relevant test target was rerun and passed
+- For a committed checkpoint, verify that it is on the current active branch before continuing
 
 ### Step 6: Refactor
 Improve code quality while keeping tests green:
@@ -109,6 +167,11 @@ Improve code quality while keeping tests green:
 - Improve naming
 - Optimize performance
 - Enhance readability
+
+When checkpoint commits are authorized, create one after refactoring is complete and tests remain green. Otherwise record the affected tests and results locally.
+Recommended commit message format:
+- `refactor: clean up after <feature or bug> implementation`
+- For a committed checkpoint, verify that it is on the current active branch before considering the TDD cycle complete
 
 ### Step 7: Verify Coverage
 ```bash
@@ -118,7 +181,10 @@ npm run test:coverage
 
 ## Testing Patterns
 
-### Unit Test Pattern (Jest/Vitest)
+### Unit Test Pattern (Jest)
+
+The `jest.fn` and `jest.mock` examples in this section and the external-service mocks below use Jest. For a Vitest project, import `{ vi }` from `vitest`, use `vi.fn` / `vi.mock`, and follow that runner's setup and mocking semantics. Do not paste Jest globals or setup unchanged into a different runner.
+
 ```typescript
 import { render, screen, fireEvent } from '@testing-library/react'
 import { Button } from './Button'
@@ -297,10 +363,12 @@ npm run test:coverage
 ```
 
 ### Coverage Thresholds
+This is a Jest `package.json` configuration example. Verify the installed runner/version and its official configuration before adapting it; other runners use different keys. Measure the relevant scope and confirm that a deliberately under-covered disposable fixture actually fails the configured threshold. An 80% report is not proof of business acceptance.
+
 ```json
 {
   "jest": {
-    "coverageThresholds": {
+    "coverageThreshold": {
       "global": {
         "branches": 80,
         "functions": 80,
@@ -375,6 +443,8 @@ npm test && npm run lint
 ```
 
 ### CI/CD Integration
+The example below retains its existing action version; it is not a recommendation to adopt or upgrade that tag. Before using it, check the project's installed runner, scripts, coverage output, and the action's official documentation for the pinned version, token/permissions, and runner requirements. Preserve the project's existing CI versions unless an upgrade is separately in scope.
+
 ```yaml
 # GitHub Actions
 - name: Run Tests
