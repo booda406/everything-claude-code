@@ -1,11 +1,11 @@
 ---
-description: "Use when auditing Claude skills and commands for quality. Supports Quick Scan (changed skills only) and Full Stocktake modes with sequential subagent batch evaluation."
+description: "Use when auditing skill quality and read-history evidence. Distinguishes physical SKILL.md files, aliases, deployment copies, and unknown usage; supports Quick Scan and Full Stocktake."
 origin: ECC
 ---
 
 # skill-stocktake
 
-Slash command (`/skill-stocktake`) that audits all Claude skills and commands using a quality checklist + AI holistic judgment. Supports two modes: Quick Scan for recently changed skills, and Full Stocktake for a complete review.
+Slash command (`/skill-stocktake`) that audits Claude skills using a quality checklist + AI holistic judgment. Supports two modes: Quick Scan for recently changed skills, and Full Stocktake for a complete review.
 
 ## Scope
 
@@ -16,7 +16,9 @@ The command targets the following paths **relative to the directory where it is 
 | `~/.claude/skills/` | Global skills (all projects) |
 | `{cwd}/.claude/skills/` | Project-level skills (if the directory exists) |
 
-**At the start of Phase 1, the command explicitly lists which paths were found and scanned.**
+**At the start of Phase 1, explicitly list which paths were found and scanned.** Only files named exactly `SKILL.md` are inventory entries; README and reference Markdown files are not skills.
+
+The entrypoints require Node.js 18+ and use a shared, dependency-free `scripts/stocktake.js` helper. All three shell entrypoints use that helper; jq is no longer required. The existing `SKILL_STOCKTAKE_GLOBAL_DIR`, `SKILL_STOCKTAKE_PROJECT_DIR`, and `SKILL_STOCKTAKE_OBSERVATIONS` overrides remain available for test fixtures; default scans do not discover other tool directories automatically.
 
 ### Targeting a specific project
 
@@ -27,7 +29,7 @@ cd ~/path/to/my-project
 /skill-stocktake
 ```
 
-If the project has no `.claude/skills/` directory, only global skills and commands are evaluated.
+If the project has no `.claude/skills/` directory, only global skills are evaluated.
 
 ## Modes
 
@@ -46,10 +48,10 @@ Re-evaluate only skills that have changed since the last run (5–10 min).
 2. Run: `bash ~/.claude/skills/skill-stocktake/scripts/quick-diff.sh \
          ~/.claude/skills/skill-stocktake/results.json`
    (Project dir is auto-detected from `$PWD/.claude/skills`; pass it explicitly only if needed)
-3. If output is `[]`: report "No changes since last run." and stop
-4. Re-evaluate only those changed files using the same Phase 2 criteria
-5. Carry forward unchanged skills from previous results
-6. Output only the diff
+3. Run `scan.sh` as well to refresh current identity and usage evidence; quick-diff detects file changes, not new read activity.
+4. If quick-diff exits with an error, report the scan/cache gap and reconcile with a Full Stocktake; never turn an error into `[]`. Missing in-scope cached entries require reconciliation. Cached entries from other project roots and legacy non-`SKILL.md` references are ignored. If quick-diff is `[]`, report no skill-file changes. Still report current unknown/available usage evidence; do not repeat stale cached counts as current.
+5. Re-evaluate changed physical skills using Phase 2. Carry forward unchanged verdicts while refreshing inventory and usage fields from the current scan, matched by `id` or verified legacy path.
+6. Output the verdict diff and any identity/usage-source changes. An identical new deployment is still a separate physical entry; its content verdict can be reused after comparing hashes.
 7. Run: `bash ~/.claude/skills/skill-stocktake/scripts/save-results.sh \
          ~/.claude/skills/skill-stocktake/results.json <<< "$EVAL_RESULTS"`
 
@@ -59,18 +61,41 @@ Re-evaluate only skills that have changed since the last run (5–10 min).
 
 Run: `bash ~/.claude/skills/skill-stocktake/scripts/scan.sh`
 
-The script enumerates skill files, extracts frontmatter, and collects UTC mtimes.
-Project dir is auto-detected from `$PWD/.claude/skills`; pass it explicitly only if needed.
+The script inventories only `SKILL.md`, collects UTC mtimes and content SHA-256 values, and resolves physical identity. Project dir is auto-detected from `$PWD/.claude/skills`; pass it explicitly only if needed.
+
+Interpret the JSON counts separately:
+
+- `scan_summary.global.count` / `project.count`: distinct physical skill files within each scope. These scope counts can overlap and must not simply be added.
+- `scan_summary.counts.entry_paths`: distinct discovered entry paths across both scopes.
+- `physical_skills`: distinct physical files after symlink/hard-link deduplication; one `skills[]` row per physical file.
+- `skill_versions`: distinct `(name, content_sha256)` groups, not a semantic count of capabilities.
+- `skills[].id`: a hash of exact filesystem device/inode identity. Adding aliases does not change it; replacing the physical file can change it. It is a current filesystem identity, not a permanent identifier or a content-version proof.
+- `skills[].aliases`: other discovered paths to the same physical file, excluding the primary `path`.
+- `deployment_copies`: separate physical files with the same name and exact content hash. Their read histories remain separate.
+- `name_conflict`: the same name has different content hashes; retain the versions separately instead of merging them.
+
+No fuzzy name matching is performed. Frontmatter extraction supports top-level string scalars and folded/literal `name` and `description` blocks, not arbitrary YAML. Unquoted nulls, booleans, numbers and dates are not string names. Missing or unsupported names fall back to the canonical folder name and are marked by `metadata_status`; inspect unsupported metadata before treating it as an authoritative name.
+
 Present the scan summary and inventory table from the script output:
 
 ```
 Scanning:
-  ✓ ~/.claude/skills/         (17 files)
-  ✗ {cwd}/.claude/skills/    (not found — global skills only)
+  Global: ~/.claude/skills/      (17 physical skills)
+  Project: {cwd}/.claude/skills/ (not found — global skills only)
 ```
 
-| Skill | 7d use | 30d use | Description |
-|-------|--------|---------|-------------|
+| Skill / physical entry | 7d reads | 30d reads | Evidence / copies | Description |
+|------------------------|----------|-----------|-------------------|-------------|
+
+### Usage evidence: unknown is not zero
+
+- Missing, unreadable, empty, or invalid observation files yield `null` counts and `usage_status: "unknown"`. A valid source with no matching Read history for a skill also yields unknown, even if other skills have observations.
+- Render `null` as **Unknown**, with `usage_reason`; never convert it to zero or infer that the skill was never used.
+- Numeric counts require valid matching Read history for that physical entry. A numeric `0` means no matching records in that window, not proof of inactivity or continuous observation coverage.
+- Match full paths, resolved aliases and physical identity. Deduplicate explicit event IDs within a physical file; do not infer duplicates when records have no ID or transfer usage between deployment copies.
+- `last_read_at` describes recorded path-read history. Old observations do not establish which historical file contents were read, nor prove that the current content hash was used after replacement or alias retargeting.
+- Read counts can include audits, setup and synchronization checks; they are not successful-task counts. A long-unused verdict also needs a trustworthy observation window and workflow relevance.
+- `scan_summary.incomplete` / `errors` signal inventory gaps. Do not interpret missing entries or unknown usage as cleanup permission.
 
 ### Phase 2 — Quality Evaluation
 
@@ -144,7 +169,7 @@ Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensi
 
 ### Phase 3 — Summary Table
 
-| Skill | 7d use | Verdict | Reason |
+| Skill / physical entry | 7d reads (or Unknown) | Verdict | Reason |
 |-------|--------|---------|--------|
 
 ### Phase 4 — Consolidation
@@ -164,7 +189,7 @@ Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensi
 `~/.claude/skills/skill-stocktake/results.json`:
 
 **`evaluated_at`**: Must be set to the actual UTC time of evaluation completion.
-Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximation like `T00:00:00Z`.
+`save-results.sh` sets it from the actual UTC clock when saving. Never use a date-only approximation like `T00:00:00Z`.
 
 ```json
 {
@@ -176,8 +201,18 @@ Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximat
     "status": "completed"
   },
   "skills": {
-    "skill-name": {
+    "id-from-current-scan": {
+      "id": "id-from-current-scan",
+      "name": "skill-name",
       "path": "~/.claude/skills/skill-name/SKILL.md",
+      "real_path": "/absolute/skills/skill-name/SKILL.md",
+      "aliases": [],
+      "deployment_copies": [],
+      "content_sha256": "content-hash-from-current-scan",
+      "usage_status": "unknown",
+      "usage_reason": "missing_observations",
+      "use_7d": null,
+      "use_30d": null,
       "verdict": "Keep",
       "reason": "Concrete, actionable, unique value for X workflow",
       "mtime": "2026-01-15T08:30:00Z"
@@ -185,6 +220,8 @@ Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximat
   }
 }
 ```
+
+Use the scan row's `id` as the cache key, not the declared name: same-name variants and separate deployments must not overwrite each other. Store the current identity, content hash and usage fields with each verdict. `save-results.sh` preserves nulls and distinct identity keys, writes atomically, and rejects invalid input before replacing the cache. Scanner-derived rows supersede stale keys for the same entry after physical replacement, while unrelated deployments and other project records remain separate. Legacy manual rows without `id` retain additive merge behavior. Quick Scan accepts legacy name-keyed caches with `path`; new content hashes also detect edits whose mtime was preserved.
 
 ## Notes
 
