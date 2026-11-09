@@ -1,46 +1,51 @@
 ---
 name: configure-ecc
-description: Interactive installer for Everything Claude Code — guides users through selecting and installing skills and rules to user-level or project-level directories, verifies paths, and optionally optimizes installed files.
+description: Maintain an existing Everything Claude Code checkout and its deployed files, or plan a fresh installation of selected skills and rules. Use when asked to configure, verify, repair, or install ECC.
 origin: ECC
 ---
 
 # Configure Everything Claude Code (ECC)
 
-An interactive, step-by-step installation wizard for the Everything Claude Code project. Uses `AskUserQuestion` to guide users through selective installation of skills and rules, then verifies correctness and offers optimization.
+## Choose a mode
 
-## When to Activate
+Choose the mode before obtaining a source or writing files. Use the host's available question mechanism only when a choice cannot be inferred from verified context.
 
-- User says "configure ecc", "install ecc", "setup everything claude code", or similar
-- User wants to selectively install skills or rules from this project
-- User wants to verify or fix an existing ECC installation
-- User wants to optimize installed skills or rules for their project
+- **Maintain an existing ECC setup** for requests to inspect, verify, repair, or update an existing checkout or deployed files.
+- **Fresh installation** when the user asks for a new installation.
+- If the mode or canonical checkout is ambiguous, report what was found and ask only for the missing choice. The absence of a checkout in the current directory does not establish that ECC is absent.
 
-## Prerequisites
+## Maintain an existing ECC setup
 
-This skill must be accessible to Claude Code before activation. Two ways to bootstrap:
-1. **Via Plugin**: `/plugin install everything-claude-code` — the plugin loads this skill automatically
-2. **Manual**: Copy only this skill to `~/.claude/skills/configure-ecc/SKILL.md`, then activate by saying "configure ecc"
+1. Identify the canonical checkout from the user's stated location or verified project context. Record its root, branch, HEAD, and working-tree status. Inspect the selected files in that working tree, including authorized local changes. Use `skills/<name>/` as the canonical workflow source unless the project documents another owner.
+2. Locate the actual source each tool uses. Resolve symlinks and distinguish aliases, independent copies, plugin-managed content, and app-managed caches. For example, `~/.agents/skills/` and `~/.claude/skills/` can lead to the same physical file. Record which paths were observed and which require in-app verification.
+3. Build a read-only preview of the exact requested files. For each destination, record the logical and resolved paths, source path, source and destination hashes, destination state (identical, missing, or different), and proposed action. Show a text diff or binary hashes. Give existing files a backup path and record absent files for rollback. Resolve unexplained differences, ambiguous ownership, or a path outside the approved root before writing.
+4. Apply only the authorized file list. Before overwriting, recheck paths and hashes, back up existing files, and verify the backups. If a source or destination changed since the preview, regenerate the affected rows before applying. Exclude Python caches and unrelated files. Include commands, settings, prompts, or plugins only when the request covers them. A preview request ends at Step 3.
+5. Read back affected files, compare hashes, and report verification and remaining differences. Verify in-app discovery separately when requested and available. A matching disk copy does not establish that a running session loaded it.
 
----
+`scripts/sync-ecc-harnesses.js --dry-run` reports intended directory copies. Its `--skill` flag selects a whole skill directory, and agents are included by default unless `--no-agents` is set. Use a verified file list for a file-scoped update. The Codex sync script covers configuration, prompts, and hooks and is not a selective skill-copy tool.
 
-## Step 0: Clone ECC Repository
+## Fresh installation
 
-Before any installation, clone the latest ECC source to `/tmp`:
+This wizard plans individual files for Claude Code user and project locations. Use the file list for a selective installation. Use a bundled installer only when its complete plan, including managed state files, matches the authorized scope. For other harnesses, inspect the selected revision's documented adapter and show its actual destinations before applying an install plan.
+
+If this skill is unavailable, Claude Code can expose it through the ECC plugin or a manual copy of this file to `~/.claude/skills/configure-ecc/SKILL.md`. Review the installation scope of either bootstrap option before applying it.
+
+### Step 0: Choose a source
+
+Use an explicitly selected local checkout or fetch the chosen upstream into a new temporary directory when the request covers fetching. Verify the checked-out revision before planning the install.
 
 ```bash
-rm -rf /tmp/everything-claude-code
-git clone https://github.com/affaan-m/everything-claude-code.git /tmp/everything-claude-code
+ECC_INSTALL_TMP=$(mktemp -d "${TMPDIR:-/tmp}/ecc-install.XXXXXX") &&
+  git clone https://github.com/affaan-m/everything-claude-code.git "$ECC_INSTALL_TMP/source"
 ```
 
-Set `ECC_ROOT=/tmp/everything-claude-code` as the source for all subsequent copy operations.
-
-If the clone fails (network issues, etc.), use `AskUserQuestion` to ask the user to provide a local path to an existing ECC clone.
+Set `ECC_ROOT` to the chosen source after verifying it. Check out the user's requested revision in the temporary clone if specified. If fetching fails, offer a user-specified local source.
 
 ---
 
-## Step 1: Choose Installation Level
+### Step 1: Choose installation level
 
-Use `AskUserQuestion` to ask the user where to install:
+Ask the user where to install if the request has not set the scope:
 
 ```
 Question: "Where should ECC components be installed?"
@@ -55,20 +60,19 @@ Store the choice as `INSTALL_LEVEL`. Set the target directory:
 - Project-level: `TARGET=.claude` (relative to current project root)
 - Both: `TARGET_USER=~/.claude`, `TARGET_PROJECT=.claude`
 
-Create the target directories if they don't exist:
-```bash
-mkdir -p $TARGET/skills $TARGET/rules
-```
+Resolve project-level paths from the verified project root. When installing at both levels, assign each selected skill and rule set to its intended level. Include existing target collisions in the preview before creating directories or writing files.
 
 ---
 
-## Step 2: Select & Install Skills
+### Step 2: Select skills
 
-### 2a: Choose Scope (Core vs Niche)
+If the user already specified individual skills, verify those names and go to Step 2d. For a rules-only installation, skip to Step 3.
 
-Default to **Core (recommended for new users)** — copy `.agents/skills/*` plus `skills/search-first/` for research-first workflows. This bundle covers engineering, evals, verification, security, strategic compaction, frontend design, and Anthropic cross-functional skills (article-writing, content-engine, market-research, frontend-slides).
+#### 2a: Choose Scope (Core vs Niche)
 
-Use `AskUserQuestion` (single select):
+Default to **Core (recommended for new users)** when the user leaves skill selection open. Use skill names from `.agents/skills/` plus `search-first` as candidates, and include only those with `skills/<name>/SKILL.md` in the selected revision. Skip repository-only entries without a canonical skill source. This bundle covers engineering, evals, verification, security, strategic compaction, frontend design, and cross-functional skills.
+
+Ask when the skill scope is unspecified:
 ```
 Question: "Install core skills only, or include niche/framework packs?"
 Options:
@@ -80,9 +84,9 @@ Default: Core only
 
 If the user chooses niche or core + niche, continue to category selection below and only include those niche skills they pick.
 
-### 2b: Choose Skill Categories
+#### 2b: Choose Skill Categories
 
-There are 7 selectable category groups below. The detailed confirmation lists that follow cover 45 skills across 8 categories, plus 1 standalone template. Use `AskUserQuestion` with `multiSelect: true`:
+Use the following categories as a selection guide. Check availability in the selected source revision before confirming individual skills.
 
 ```
 Question: "Which skill categories do you want to install?"
@@ -90,16 +94,17 @@ Options:
   - "Framework & Language" — "Django, Laravel, Spring Boot, Go, Python, Java, Frontend, Backend patterns"
   - "Database" — "PostgreSQL, ClickHouse, JPA/Hibernate patterns"
   - "Workflow & Quality" — "TDD, verification, learning, security review, compaction"
+  - "Business & Content" — "Article writing, content, market research, and investor materials"
   - "Research & APIs" — "Deep research, Exa search, Claude API patterns"
   - "Social & Content Distribution" — "X/Twitter API, crossposting alongside content-engine"
-  - "Media Generation" — "fal.ai image/video/audio alongside VideoDB"
+  - "Media Generation" — "fal.ai image/video/audio and video editing"
   - "Orchestration" — "dmux multi-agent workflows"
   - "All skills" — "Install every available skill"
 ```
 
-### 2c: Confirm Individual Skills
+#### 2c: Confirm Individual Skills
 
-For each selected category, print the full list of skills below and ask the user to confirm or deselect specific ones. If the list exceeds 4 items, print the list as text and use `AskUserQuestion` with an "Install all listed" option plus "Other" for the user to paste specific names.
+For each selected category, print the full list of skills below and ask the user to confirm or deselect specific ones. If the list exceeds 4 items, print the list as text and offer an "Install all listed" option plus "Other" for the user to paste specific names.
 
 **Category: Framework & Language (21 skills)**
 
@@ -192,73 +197,59 @@ For each selected category, print the full list of skills below and ask the user
 |-------|-------------|
 | `project-guidelines-example` | Template for creating project-specific skills |
 
-### 2d: Execute Installation
+#### 2d: Plan selected skill files
 
-For each selected skill, copy the entire skill directory:
-```bash
-cp -r $ECC_ROOT/skills/<skill-name> $TARGET/skills/
-```
-
-Note: `continuous-learning` and `continuous-learning-v2` have extra files (config.json, hooks, scripts) — ensure the entire directory is copied, not just SKILL.md.
+For each selection, verify its `SKILL.md` and include the supporting references, scripts, and assets required by the selected source revision. Preserve their relative paths under the target skill directory. `continuous-learning` and `continuous-learning-v2` may require configuration or hook files. Distinguish files in a selected skill from host settings that would enable those hooks.
 
 ---
 
-## Step 3: Select & Install Rules
+### Step 3: Select rules and review the file list
 
-Use `AskUserQuestion` with `multiSelect: true`:
+If the user already specified rule sets, use that selection. For a skills-only installation, skip rule selection and review the skill file list. Otherwise ask which options apply:
 
 ```
 Question: "Which rule sets do you want to install?"
 Options:
-  - "Common rules (Recommended)" — "Language-agnostic principles: coding style, git workflow, testing, security, etc. (8 files)"
-  - "TypeScript/JavaScript" — "TS/JS patterns, hooks, testing with Playwright (5 files)"
-  - "Python" — "Python patterns, pytest, black/ruff formatting (5 files)"
-  - "Go" — "Go patterns, table-driven tests, gofmt/staticcheck (5 files)"
+  - "Common rules (Recommended)" — "Language-agnostic coding, git, testing, and security guidance"
+  - "TypeScript/JavaScript" — "TS/JS patterns, hooks, and Playwright testing guidance"
+  - "Python" — "Python patterns, pytest, and black/ruff formatting guidance"
+  - "Go" — "Go patterns, table-driven tests, and gofmt/staticcheck guidance"
+  - "Skip rules" — "Install the selected skills only"
 ```
 
-Execute installation:
-```bash
-# Common rules (flat copy into rules/)
-cp -r $ECC_ROOT/rules/common/* $TARGET/rules/
+Follow the selected revision's `rules/README.md`. Keep rule directories such as `rules/common/` and `rules/typescript/` under the target `rules/` so names and `../common/` references resolve. Verify compatible common rules at the target for each dependent language set. When they are missing, show the required common files as dependencies in the preview. Keep the dependent rules pending if the common files cannot be verified or their installation is outside the authorized scope.
 
-# Language-specific rules (flat copy into rules/)
-cp -r $ECC_ROOT/rules/typescript/* $TARGET/rules/   # if selected
-cp -r $ECC_ROOT/rules/python/* $TARGET/rules/        # if selected
-cp -r $ECC_ROOT/rules/golang/* $TARGET/rules/        # if selected
-```
-
-**Important**: If the user selects any language-specific rules but NOT common rules, warn them:
-> "Language-specific rules extend the common rules. Installing without common rules may result in incomplete coverage. Install common rules too?"
+Review the combined destination list for skills and rules, including existing files and proposed backups. Apply the file verification and authorization steps from maintenance. Keep a fresh installation within the selected target and component scope.
 
 ---
 
-## Step 4: Post-Installation Verification
+### Step 4: Verify the installation
 
 After installation, perform these automated checks:
 
-### 4a: Verify File Existence
+#### 4a: Verify File Existence
 
-List all installed files and confirm they exist at the target location:
+For each selected root, use it as `TARGET` and verify the planned files:
 ```bash
-ls -la $TARGET/skills/
-ls -la $TARGET/rules/
+ls -la "$TARGET/skills/"
+ls -la "$TARGET/rules/"
 ```
 
-### 4b: Check Path References
+#### 4b: Check Path References
 
 Scan all installed `.md` files for path references:
 ```bash
-grep -rn "~/.claude/" $TARGET/skills/ $TARGET/rules/
-grep -rn "../common/" $TARGET/rules/
-grep -rn "skills/" $TARGET/skills/
+grep -rn "~/.claude/" "$TARGET/skills/" "$TARGET/rules/"
+grep -rn "../common/" "$TARGET/rules/"
+grep -rn "skills/" "$TARGET/skills/"
 ```
 
 **For project-level installs**, flag any references to `~/.claude/` paths:
-- If a skill references `~/.claude/settings.json` — this is usually fine (settings are always user-level)
+- If a skill references `~/.claude/settings.json`, verify that its use of user-level settings is intentional. Changing those settings requires its own scope.
 - If a skill references `~/.claude/skills/` or `~/.claude/rules/` — this may be broken if installed only at project level
 - If a skill references another skill by name — check that the referenced skill was also installed
 
-### 4c: Check Cross-References Between Skills
+#### 4c: Check Cross-References Between Skills
 
 Some skills reference others. Verify these dependencies:
 - `django-tdd` may reference `django-patterns`
@@ -273,7 +264,7 @@ Some skills reference others. Verify these dependencies:
 - `x-api` references `content-engine` and `crosspost`
 - Language-specific rules reference `common/` counterparts
 
-### 4d: Report Issues
+#### 4d: Report Issues
 
 For each issue found, report:
 1. **File**: The file containing the problematic reference
@@ -283,9 +274,9 @@ For each issue found, report:
 
 ---
 
-## Step 5: Optimize Installed Files (Optional)
+### Step 5: Preview optional customization
 
-Use `AskUserQuestion`:
+Offer these options only when customization is requested:
 
 ```
 Question: "Would you like to optimize the installed files for your project?"
@@ -300,8 +291,8 @@ Options:
 1. Read each installed SKILL.md
 2. Ask the user what their project's tech stack is (if not already known)
 3. For each skill, suggest removals of irrelevant sections
-4. Edit the SKILL.md files in-place at the installation target (NOT the source repo)
-5. Fix any path issues found in Step 4
+4. Preview the exact files and path corrections at the agreed customization location
+5. Apply authorized edits after verifying backups
 
 ### If optimizing rules:
 1. Read each installed rule .md file
@@ -310,19 +301,15 @@ Options:
    - Preferred formatting tools
    - Git workflow conventions
    - Security requirements
-3. Edit the rule files in-place at the installation target
+3. Preview the exact rule edits and apply authorized changes after verifying backups
 
-**Critical**: Only modify files in the installation target (`$TARGET/`), NEVER modify files in the source ECC repository (`$ECC_ROOT/`).
+Use the chosen source of truth for customization. Keep project-specific copies distinct from shared canonical files. An installation request alone does not authorize rewriting the canonical checkout.
 
 ---
 
-## Step 6: Installation Summary
+### Step 6: Installation summary
 
-Clean up the cloned repository from `/tmp`:
-
-```bash
-rm -rf /tmp/everything-claude-code
-```
+Clean up only the temporary directory created by this installation after confirming it is safe to remove.
 
 Then print a summary report:
 
@@ -337,8 +324,8 @@ Then print a summary report:
 - skill-1, skill-2, skill-3, ...
 
 ### Rules Installed ([count])
-- common (8 files)
-- typescript (5 files)
+- common ([verified count] files)
+- typescript ([verified count] files)
 - ...
 
 ### Verification Results
@@ -359,8 +346,8 @@ Then print a summary report:
 - For project-level: check `.claude/skills/<skill-name>/SKILL.md` exists
 
 ### "Rules not working"
-- Rules are flat files, not in subdirectories: `$TARGET/rules/coding-style.md` (correct) vs `$TARGET/rules/common/coding-style.md` (incorrect for flat install)
-- Restart Claude Code after installing rules
+- Verify directory layout and relative references against the selected revision’s rule instructions
+- Check rule discovery in a fresh Claude Code session when needed
 
 ### "Path reference errors after project-level install"
 - Some skills assume `~/.claude/` paths. Run Step 4 verification to find and fix these.
